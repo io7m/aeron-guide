@@ -21,7 +21,7 @@ import java.util.Objects;
 import java.util.Random;
 
 import static java.lang.Boolean.TRUE;
-import static java.nio.charset.StandardCharsets.*;
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 /**
  * A mindlessly simple Echo client.
@@ -136,6 +136,24 @@ public final class EchoClient implements Closeable
 
     final Random random = new Random();
 
+    /*
+     * Try repeatedly to send an initial HELLO message
+     */
+
+    while (true) {
+      if (pub.isConnected()) {
+        if (sendMessage(pub, buffer, "HELLO " + this.local_address.getPort())) {
+          break;
+        }
+      }
+
+      Thread.sleep(1000L);
+    }
+
+    /*
+     * Send an infinite stream of random unsigned integers.
+     */
+
     while (true) {
       if (pub.isConnected()) {
         sendMessage(pub, buffer, Integer.toUnsignedString(random.nextInt()));
@@ -156,21 +174,35 @@ public final class EchoClient implements Closeable
     final byte[] buf = new byte[length];
     buffer.getBytes(offset, buf);
     final String response = new String(buf, UTF_8);
-    System.out.println("Response: " + response);
+    LOG.debug("response: {}", response);
   }
 
-  private static void sendMessage(
+  private static boolean sendMessage(
     final Publication pub,
     final UnsafeBuffer buffer,
     final String text)
   {
+    LOG.debug("send: {}", text);
+
     final byte[] value = text.getBytes(UTF_8);
     buffer.putBytes(0, value);
-    final long result = pub.offer(buffer, 0, text.length());
 
-    if (result < 0L) {
-      LOG.error("could not send: {}", Long.valueOf(result));
+    long result = 0L;
+    for (int index = 0; index < 5; ++index) {
+      result = pub.offer(buffer, 0, text.length());
+      if (result < 0L) {
+        try {
+          Thread.sleep(100L);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        continue;
+      }
+      return true;
     }
+
+    LOG.error("could not send: {}", Long.valueOf(result));
+    return false;
   }
 
   private Publication setupPublication()

@@ -21,4 +21,5 @@ pre {
   border: 1px #ddd solid;
   background-color: #eee;
   padding: 1em;
+  overflow: auto;
 }
