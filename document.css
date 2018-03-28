@@ -1,0 +1,24 @@
+body {
+  padding: 1em;
+  font-family: sans-serif;
+}
+
+th {
+  text-align: left;
+  padding-bottom: 0.5em;
+}
+
+td {
+  padding-right: 2em;
+}
+
+#main {
+  text-align: justify;
+  max-width: 50em;
+}
+
+pre {
+  border: 1px #ddd solid;
+  background-color: #eee;
+  padding: 1em;
+}
