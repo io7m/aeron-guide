@@ -23,3 +23,11 @@ pre {
   padding: 1em;
   overflow: auto;
 }
+
+figure {
+  border: 1px #ddd solid;
+  padding: 1em;
+  margin: 0em;
+  overflow: auto;
+}
+

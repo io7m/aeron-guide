@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration
+  xmlns="http://ch.qos.logback/xml/ns/logback"
+  debug="false">
+
+  <appender
+    name="STDERR"
+    class="ch.qos.logback.core.ConsoleAppender">
+    <encoder>
+      <pattern>%date{"HH:mm:ss.SSS"} %level [%thread] %logger{128}: %msg%n</pattern>
+    </encoder>
+    <target>System.err</target>
+  </appender>
+
+  <root level="TRACE">
+    <appender-ref ref="STDERR"/>
+  </root>
+
+</configuration>

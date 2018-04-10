@@ -84,6 +84,12 @@
       <version>1.8.2</version>
     </dependency>
     <dependency>
+      <groupId>io.aeron</groupId>
+      <artifactId>aeron-agent</artifactId>
+      <version>1.8.2</version>
+      <classifier>all</classifier>
+    </dependency>
+    <dependency>
       <groupId>ch.qos.logback</groupId>
       <artifactId>logback-classic</artifactId>
       <version>1.2.3</version>
@@ -92,6 +98,19 @@
       <groupId>com.beust</groupId>
       <artifactId>jcommander</artifactId>
       <version>1.72</version>
+    </dependency>
+
+    <dependency>
+      <groupId>org.immutables</groupId>
+      <artifactId>value</artifactId>
+      <version>2.6.0-alpha1</version>
+      <scope>provided</scope>
+    </dependency>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.12</version>
+      <scope>test</scope>
     </dependency>
   </dependencies>
 

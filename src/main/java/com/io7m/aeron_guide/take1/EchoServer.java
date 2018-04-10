@@ -2,10 +2,12 @@ package com.io7m.aeron_guide.take1;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
+import io.aeron.FragmentAssembler;
 import io.aeron.Image;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.driver.MediaDriver;
+import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.BufferUtil;
 import org.agrona.DirectBuffer;
@@ -58,7 +60,7 @@ public final class EchoServer implements Closeable
     this.clients = new ConcurrentHashMap<>(32);
   }
 
-  private static final class ServerClient implements Closeable
+  private static final class ServerClient implements AutoCloseable
   {
     private static final Pattern HELLO_PATTERN =
       Pattern.compile("HELLO ([0-9]+)");
@@ -91,11 +93,9 @@ public final class EchoServer implements Closeable
 
     @Override
     public void close()
+      throws Exception
     {
-      final Publication pub = this.publication;
-      if (pub != null) {
-        pub.close();
-      }
+      closeIfNotNull(this.publication);
     }
 
     public void onReceiveMessage(
@@ -224,7 +224,7 @@ public final class EchoServer implements Closeable
   public void run()
     throws Exception
   {
-    try (Subscription sub = this.setupSubscription()) {
+    try (final Subscription sub = this.setupSubscription()) {
       this.runLoop(sub);
     }
   }
@@ -233,9 +233,12 @@ public final class EchoServer implements Closeable
     final Subscription sub)
     throws InterruptedException
   {
+    final FragmentHandler assembler =
+      new FragmentAssembler(this::onParseMessage);
+
     while (true) {
       if (sub.isConnected()) {
-        sub.poll(this::onParseMessage, 10);
+        sub.poll(assembler, 10);
       }
 
       Thread.sleep(100L);
@@ -318,8 +321,10 @@ public final class EchoServer implements Closeable
     final int session = image.sessionId();
     LOG.debug("onClientDisconnected: {}", image.sourceIdentity());
 
-    try (ServerClient client = this.clients.remove(Integer.valueOf(session))) {
+    try (final ServerClient client = this.clients.remove(Integer.valueOf(session))) {
       LOG.debug("onClientDisconnected: closing client {}", client);
+    } catch (final Exception e) {
+      LOG.error("onClientDisconnected: failed to close client: ", e);
     }
   }
 
@@ -357,7 +362,7 @@ public final class EchoServer implements Closeable
     final InetSocketAddress local_address =
       new InetSocketAddress(local_name, local_port.intValue());
 
-    try (EchoServer server = create(directory, local_address)) {
+    try (final EchoServer server = create(directory, local_address)) {
       server.run();
     }
   }

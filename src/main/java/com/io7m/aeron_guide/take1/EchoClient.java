@@ -2,9 +2,11 @@ package com.io7m.aeron_guide.take1;
 
 import io.aeron.Aeron;
 import io.aeron.ChannelUriStringBuilder;
+import io.aeron.FragmentAssembler;
 import io.aeron.Publication;
 import io.aeron.Subscription;
 import io.aeron.driver.MediaDriver;
+import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.BufferUtil;
 import org.agrona.DirectBuffer;
@@ -119,8 +121,8 @@ public final class EchoClient implements Closeable
   public void run()
     throws Exception
   {
-    try (Subscription sub = this.setupSubscription()) {
-      try (Publication pub = this.setupPublication()) {
+    try (final Subscription sub = this.setupSubscription()) {
+      try (final Publication pub = this.setupPublication()) {
         this.runLoop(sub, pub);
       }
     }
@@ -154,12 +156,15 @@ public final class EchoClient implements Closeable
      * Send an infinite stream of random unsigned integers.
      */
 
+    final FragmentHandler assembler =
+      new FragmentAssembler(EchoClient::onParseMessage);
+
     while (true) {
       if (pub.isConnected()) {
         sendMessage(pub, buffer, Integer.toUnsignedString(random.nextInt()));
       }
       if (sub.isConnected()) {
-        sub.poll(EchoClient::onParseMessage, 10);
+        sub.poll(assembler, 10);
       }
       Thread.sleep(1000L);
     }
@@ -258,7 +263,7 @@ public final class EchoClient implements Closeable
     final InetSocketAddress remote_address =
       new InetSocketAddress(remote_name, remote_port.intValue());
 
-    try (EchoClient client = create(directory, local_address, remote_address)) {
+    try (final EchoClient client = create(directory, local_address, remote_address)) {
       client.run();
     }
   }
