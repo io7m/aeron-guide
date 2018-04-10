@@ -134,7 +134,7 @@ will use for communication, and the address of the server to which
 the client will connect. It passes these addresses on to the
 constructor for later use.
 
-[EchoClient.create()](EchoClient.java)
+[EchoClient.create()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L71)
 ```{include=out/echo_client_create.txt}
 ```
 
@@ -148,7 +148,7 @@ media driver and Aeron when necessary. It implements the standard
 `java.io.Closeable` interface and does the necessary cleanup in the
 `close` method.
 
-[EchoClient.close()](EchoClient.java)
+[EchoClient.close()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L239)
 ```{include=out/echo_client_close.txt}
 ```
 
@@ -182,7 +182,7 @@ simply pick an arbitrary value of `0x2044f002`, but any non-zero
 32-bit unsigned value can be used; the choice is entirely up to
 the application.
 
-[EchoClient.setupSubscription()](EchoClient.java)
+[EchoClient.setupSubscription()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L226)
 ```{include=out/echo_client_setup_sub.txt}
 ```
 
@@ -198,7 +198,7 @@ to the server. The procedure for creating the publication is very
 similar to that of the _subscription_, so the explanation won't be
 repeated here.
 
-[EchoClient.setupPublication()](EchoClient.java)
+[EchoClient.setupPublication()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L213)
 ```{include=out/echo_client_setup_pub.txt}
 ```
 
@@ -213,7 +213,7 @@ We now define a `runLoop` method that takes a created publication
 and subscription and simply loops forever, sending and receiving
 messages.
 
-[EchoClient.runLoop()](EchoClient.java)
+[EchoClient.runLoop()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L131)
 ```{include=out/echo_client_run_loop.txt}
 ```
 
@@ -250,7 +250,7 @@ The method returns `true` if the message was sent, and logs an
 error message and returns `false` otherwise. Better approaches for
 real applications are [discussed later](#weak_message_sending_not_robust).
 
-[EchoClient.sendMessage()](EchoClient.java)
+[EchoClient.sendMessage()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L185)
 ```{include=out/echo_client_send_message.txt}
 ```
 
@@ -266,14 +266,14 @@ to ever send or receive a message that could have exceeded the
 the underlying UDP transport. If it does happen, the
 `FragmentAssembler` takes care of it.
 
-[EchoClient.onParseMessage()](EchoClient.java)
+[EchoClient.onParseMessage()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L173)
 ```{include=out/echo_client_on_parse_message.txt}
 ```
 
 Now that we have all of the required pieces, the `run` method is
 trivial:
 
-[EchoClient.run()](EchoClient.java)
+[EchoClient.run()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L121)
 ```{include=out/echo_client_run.txt}
 ```
 
@@ -281,7 +281,7 @@ This is the bare minimum that is required to have a working client. For
 ease of testing, a simple `main` method can be defined that takes
 command line arguments:
 
-[EchoClient.main()](EchoClient.java)
+[EchoClient.main()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L246)
 ```{include=out/echo_client_main.txt}
 ```
 
@@ -304,7 +304,7 @@ specifies a local address to which clients will connect.
 
 The `run` method, however, is different in several aspects.
 
-[EchoServer.setupSubscription()](EchoServer.java)
+[EchoServer.setupSubscription()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L301)
 ```{include=out/echo_server_setup_sub.txt}
 ```
 
@@ -326,7 +326,7 @@ We provide the subscription with pair of method references,
 will be called when an _image_ becomes available and unavailable,
 respectively.
 
-[EchoServer.onClientConnected()](EchoServer.java)
+[EchoServer.onClientConnected()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L331)
 ```{include=out/echo_server_on_client_connected.txt}
 ```
 
@@ -344,7 +344,7 @@ the _image_, call the `close` method on the corresponding
 `ServerClient` instance, assuming that one exists, and remove
 `ServerClient` instance from the table of clients.
 
-[EchoServer.onClientDisconnected()](EchoServer.java)
+[EchoServer.onClientDisconnected()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L318)
 ```{include=out/echo_server_on_client_disconnected.txt}
 ```
 
@@ -355,7 +355,7 @@ shortly.
 
 The complete `run` method, therefore, looks like this:
 
-[EchoServer.run()](EchoServer.java)
+[EchoServer.run()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L224)
 ```{include=out/echo_server_run.txt}
 ```
 
@@ -363,14 +363,14 @@ The `runLoop` method on the server is simplified when compared
 to the analogous method on the client. The method simply polls
 the main subscription repeatedly:
 
-[EchoServer.runLoop()](EchoServer.java)
+[EchoServer.runLoop()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L232)
 ```{include=out/echo_server_run_loop.txt}
 ```
 
 The main difference is the work that now takes place in the `onParseMessage`
 method:
 
-[EchoServer.onParseMessage()](EchoServer.java)
+[EchoServer.onParseMessage()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L248)
 ```{include=out/echo_server_on_parse_message.txt}
 ```
 
@@ -387,7 +387,7 @@ Due to the small size of the `ServerClient` class (it effectively
 only contains a single method that does interesting work), the code
 is published here in its entirety:
 
-[EchoServer.ServerClient](EchoServer.java)
+[EchoServer.ServerClient](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L63)
 ```{include=out/echo_server_server_client.txt}
 ```
 
@@ -429,7 +429,7 @@ At this point, we appear to have a working client and server. An
 additional `main` method is added to the server to help with testing
 from the command line:
 
-[EchoServer.main()](EchoServer.java)
+[EchoServer.main()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L349)
 ```{include=out/echo_server_main.txt}
 ```
 
@@ -962,7 +962,7 @@ driver_ automatically assigns _session IDs_, it must use values outside
 of this range to avoid conflict with any that we assign ourselves. We
 also initialize a value of type `EchoServerExecutorService`.
 
-[EchoServer.create()](EchoServer.java)
+[EchoServer.create()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L94)
 ```{include=out/echo_server2_create.txt}
 ```
 
@@ -972,7 +972,7 @@ into an immutable `EchoServerConfiguration` type. The
 implementation of this type is generated automatically by the
 [immutables.org](http://www.immutables.org) annotation processor.
 
-[EchoServerConfiguration](EchoServerConfiguration.java)
+[EchoServerConfiguration](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerConfiguration.java#L9)
 ```{include=out/echo_server2_EchoServerConfiguration.txt}
 ```
 
@@ -985,11 +985,11 @@ issues](#weak_thread)), and to ensure that access to the server's
 internal state is strictly single-threaded. The implementation of
 this class is fairly unsurprising:
 
-[EchoServerExecutorService](EchoServerExecutorService.java)
+[EchoServerExecutorService](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerExecutorService.java#L10)
 ```{include=out/echo_server2_executor_service.txt}
 ```
 
-[EchoServerExecutor](EchoServerExecutor.java)
+[EchoServerExecutor](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerExecutor.java#L15)
 ```{include=out/echo_server2_executor.txt}
 ```
 
@@ -1006,15 +1006,15 @@ confined to a single thread via the `EchoServerExecutor` type. The
 `EchoServer` class defines three methods that each essentially
 delegate to the `ClientState` class:
 
-[EchoServer.onInitialClientConnected()](EchoServer.java)
+[EchoServer.onInitialClientConnected()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L316)
 ```{include=out/echo_server2_on_initial_client_connected.txt}
 ```
 
-[EchoServer.onInitialClientDisconnected()](EchoServer.java)
+[EchoServer.onInitialClientDisconnected()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L331)
 ```{include=out/echo_server2_on_initial_client_disconnected.txt}
 ```
 
-[EchoServer.onInitialClientMessage()](EchoServer.java)
+[EchoServer.onInitialClientMessage()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L260)
 ```{include=out/echo_server2_on_initial_client_message.txt}
 ```
 
@@ -1028,7 +1028,7 @@ The `ClientState.onInitialClientConnectedProcess()` method does
 the majority of the work required when a client requests the
 creation of a new _duologue_:
 
-[EchoServer.ClientState.onInitialClientConnectedProcess()](EchoServer.java)
+[EchoServer.ClientState.onInitialClientConnectedProcess()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L400)
 ```{include=out/echo_server2_on_initial_client_message_process.txt}
 ```
 
@@ -1039,7 +1039,7 @@ of the client, and then calling `EchoServerDuologue.create()` (which
 does the actual work of creating the underlying Aeron _publications_
 and _subscriptions_:
 
-[EchoServer.ClientState.allocateNewDuologue()](EchoServer.java)
+[EchoServer.ClientState.allocateNewDuologue()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L486)
 ```{include=out/echo_server2_allocateNewDuologue.txt}
 ```
 
@@ -1047,11 +1047,11 @@ The `ClientState.onInitialClientConnected()` and `ClientState.onInitialClientDis
 methods merely record the IP address associated with each _session ID_
 for later use in the `ClientState.onInitialClientConnectedProcess()` method:
 
-[EchoServer.ClientState.onInitialClientConnected()](EchoServer.java)
+[EchoServer.ClientState.onInitialClientConnected()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L538)
 ```{include=out/echo_server2_onInitialClientConnected.txt}
 ```
 
-[EchoServer.ClientState.onInitialClientDisconnected()](EchoServer.java)
+[EchoServer.ClientState.onInitialClientDisconnected()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L530)
 ```{include=out/echo_server2_onInitialClientDisconnected.txt}
 ```
 
@@ -1063,14 +1063,14 @@ our implementation, we require 2 UDP ports for every client, have
 a configurable limit of `c` clients, and have a configurable base port `p`.
 We therefore set the range of ports to `[p, p + (2 * c))`.
 
-[EchoServerPortAllocator](EchoServerPortAllocator.java)
+[EchoServerPortAllocator](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerPortAllocator.java#L17)
 ```{include=out/echo_server2_EchoServerPortAllocator.txt}
 ```
 
 Similarly, the allocation of _session IDs_ for new _duologues_ is
 handled by the `EchoServerSessionAllocator` class [^session_port_alloc]:
 
-[EchoServerSessionAllocator](EchoServerSessionAllocator.java)
+[EchoServerSessionAllocator](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerSessionAllocator.java#L23)
 ```{include=out/echo_server2_EchoServerSessionAllocator.txt}
 ```
 
@@ -1079,14 +1079,14 @@ current _duologues_ in order to allow them to process pending
 messages, and is also responsible for deleting expired
 _duologues_:
 
-[EchoServer.ClientState.poll()](EchoServer.java)
+[EchoServer.ClientState.poll()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L548)
 ```{include=out/echo_server2_poll.txt}
 ```
 
 Finally, the actual per-_duologue_ state and behaviour is
 encapsulated by the `EchoServerDuologue` class:
 
-[EchoServerDuologue](EchoServerDuologue.java)
+[EchoServerDuologue](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerDuologue.java#L29)
 ```{include=out/echo_server2_EchoServerDuologue.txt}
 ```
 
@@ -1106,7 +1106,7 @@ In order to reduce the amount of duplicate code that results
 from creating _publications_ and _subscriptions_, we abstract
 the calls to create them into their own class, `EchoChannels`:
 
-[EchoChannels](EchoChannels.java)
+[EchoChannels](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoChannels.java#L19)
 ```{include=out/echo_server2_EchoChannels.txt}
 ```
 
@@ -1115,21 +1115,21 @@ we define a `sendMessage()` method that retries sending for up to
 ~500ms before raising an exception. This ensures that messages
 cannot just "go missing":
 
-[EchoMessages](EchoMessages.java)
+[EchoMessages](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoMessages.java#L18)
 ```{include=out/echo_server2_EchoMessages.txt}
 ```
 
 The server's `run()` method should not be surprising:
 
-[EchoServer.run()](EchoServer.java)
+[EchoServer.run()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L229)
 ```{include=out/echo_server2_run.txt}
 ```
 
-[EchoServer.setupAllClientsPublication()](EchoServer.java)
+[EchoServer.setupAllClientsPublication()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L292)
 ```{include=out/echo_server2_setupAllClientsPublication.txt}
 ```
 
-[EchoServer.setupAllClientsSubscription()](EchoServer.java)
+[EchoServer.setupAllClientsSubscription()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L305)
 ```{include=out/echo_server2_setupAllClientsSubscription.txt}
 ```
 
@@ -1142,13 +1142,13 @@ The `create()` method for the client has similar modifications to
 those made in the server implementation (such as the introduction
 of a reserved range of _session IDs_):
 
-[EchoClient.create()](EchoClient.java)
+[EchoClient.create()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoClient.java#L79)
 ```{include=out/echo_client2_create.txt}
 ```
 
 The `run()` method is somewhat more involved:
 
-[EchoClient.run()](EchoClient.java)
+[EchoClient.run()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoClient.java#L175)
 ```{include=out/echo_client2_run.txt}
 ```
 
@@ -1163,7 +1163,7 @@ the [issues noted about disconnections](#weak_client_disconnections)).
 Assuming that we receive all the data we expect from the server,
 we enter into the now familar `runEchoLoop` method:
 
-[EchoClient.runEchoLoop()](EchoClient.java)
+[EchoClient.runEchoLoop()](https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoClient.java#L221)
 ```{include=out/echo_client2_runEchoLoop.txt}
 ```
 
@@ -1290,7 +1290,7 @@ implemented with a custom _endpoint_ implementation.
 
 See [the driver extension directory](https://github.com/real-logic/aeron/tree/master/aeron-driver/src/main/java/io/aeron/driver/ext).
 
-## Per-packet AES Encryption
+## Per-packet Encryption
 
 If we wanted to protect against malicious clients that have the
 capability of reading and/or modifying the packets sent by another

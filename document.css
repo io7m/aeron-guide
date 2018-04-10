@@ -12,7 +12,7 @@ td {
   padding-right: 2em;
 }
 
-#main {
+#main, #footer {
   text-align: justify;
   max-width: 50em;
 }
