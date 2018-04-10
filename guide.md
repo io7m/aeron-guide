@@ -24,6 +24,15 @@ configuration will serve a relatively small number of clients
 the tens of thousands of clients concurrently that might be expected
 of a high-performance web server [^connect_limit].
 
+This guide is intended to supplement the existing [Java programming guide](https://github.com/real-logic/aeron/wiki/Java-Programming-Guide).
+Familiarity with networking and UDP sockets is assumed, but no prior
+experience with Aeron is assumed. See the following documents for
+details:
+
+  * [Java programming guide](https://github.com/real-logic/aeron/wiki/Java-Programming-Guide)
+  * [Aeron protocol specification](https://github.com/real-logic/aeron/wiki/Protocol-Specification)
+  * [Aeron design overview](https://github.com/real-logic/aeron/wiki/Design-Overview)
+
 # Concepts
 
 ## Publications And Subscriptions

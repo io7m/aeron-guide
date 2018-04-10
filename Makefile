@@ -14,6 +14,8 @@ dist: guide.html
 	mv guide.html dist
 	cp document.css dist
 	cp normal_nat.png dist
+	find dist -type d -exec chmod -v 755 {} \;
+	find dist -type f -exec chmod -v 644 {} \;
 
 clean:
 	rm -f guide.html guide.html.tmp
