@@ -1,6 +1,36 @@
+.constant,
+.expression,
+.keyword,
+.function,
+.variable
+{
+  font-family: monospace;
+}
+
+.subject {
+  font-style: italic;
+}
+
+.brand
+{
+  font-size:   75%;
+  font-family: monospace;
+}
+
+th {
+  text-align: left;
+  padding-bottom: 0.5em;
+}
+
+blockquote {
+  font-style: italic;
+}
+
 body {
   padding: 1em;
   font-family: sans-serif;
+  max-width: 50em;
+  text-align: justify;
 }
 
 th {
@@ -10,11 +40,6 @@ th {
 
 td {
   padding-right: 2em;
-}
-
-#main, #footer {
-  text-align: justify;
-  max-width: 50em;
 }
 
 pre {
@@ -30,4 +55,3 @@ figure {
   margin: 0em;
   overflow: auto;
 }
-
