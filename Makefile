@@ -5,19 +5,19 @@ fragments/fragments.txt: fragments.sh
 	./fragments.sh
 	touch fragments/fragments.txt
 
-guide.html: guide.md fragments/fragments.txt
-	./pandoc.sh guide.md > guide.html.tmp
-	mv guide.html.tmp guide.html
+document.html: document.md fragments/fragments.txt
+	./pandoc.sh document.md > document.html.tmp
+	mv document.html.tmp document.html
 
-dist: guide.html
+dist: document.html
 	mkdir -p dist
-	mv guide.html dist
+	mv document.html dist
 	cp document.css dist
 	cp normal_nat.png dist
 	find dist -type d -exec chmod -v 755 {} \;
 	find dist -type f -exec chmod -v 644 {} \;
 
 clean:
-	rm -f guide.html guide.html.tmp
+	rm -f document.html document.html.tmp
 	rm -rf fragments
 
