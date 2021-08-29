@@ -1,0 +1,21 @@
+  private void onParseMessage(
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+  {
+    final int session = header.sessionId();
+
+    final ServerClient client = this.clients.get(Integer.valueOf(session));
+    if (client == null) {
+      LOG.warn(
+        "received message from unknown client: {}",
+        Integer.valueOf(session));
+      return;
+    }
+
+    final byte[] buf = new byte[length];
+    buffer.getBytes(offset, buf);
+    final String message = new String(buf, UTF_8);
+    client.onReceiveMessage(message);
+  }

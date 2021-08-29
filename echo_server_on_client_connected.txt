@@ -1,0 +1,10 @@
+  private void onClientConnected(
+    final Image image)
+  {
+    final int session = image.sessionId();
+    LOG.debug("onClientConnected: {}", image.sourceIdentity());
+
+    this.clients.put(
+      Integer.valueOf(session),
+      new ServerClient(session, image, this.aeron));
+  }

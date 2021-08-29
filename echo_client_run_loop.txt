@@ -1,0 +1,41 @@
+  private void runLoop(
+    final Subscription sub,
+    final Publication pub)
+    throws InterruptedException
+  {
+    final UnsafeBuffer buffer =
+      new UnsafeBuffer(BufferUtil.allocateDirectAligned(2048, 16));
+
+    final Random random = new Random();
+
+    /*
+     * Try repeatedly to send an initial HELLO message
+     */
+
+    while (true) {
+      if (pub.isConnected()) {
+        if (sendMessage(pub, buffer, "HELLO " + this.local_address.getPort())) {
+          break;
+        }
+      }
+
+      Thread.sleep(1000L);
+    }
+
+    /*
+     * Send an infinite stream of random unsigned integers.
+     */
+
+    final FragmentHandler assembler =
+      new FragmentAssembler(EchoClient::onParseMessage);
+
+    while (true) {
+      if (pub.isConnected()) {
+        sendMessage(pub, buffer, Integer.toUnsignedString(random.nextInt()));
+      }
+      if (sub.isConnected()) {
+        sub.poll(assembler, 10);
+      }
+      Thread.sleep(1000L);
+    }
+  }

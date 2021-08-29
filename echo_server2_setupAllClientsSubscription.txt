@@ -1,0 +1,10 @@
+  private Subscription setupAllClientsSubscription()
+  {
+    return EchoChannels.createSubscriptionWithHandlers(
+      this.aeron,
+      this.configuration.localAddress(),
+      this.configuration.localInitialPort(),
+      ECHO_STREAM_ID,
+      this::onInitialClientConnected,
+      this::onInitialClientDisconnected);
+  }

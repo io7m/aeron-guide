@@ -1,0 +1,56 @@
+    public void poll()
+    {
+      this.exec.assertIsExecutorThread();
+
+      final Iterator<Map.Entry<Integer, EchoServerDuologue>> iter =
+        this.client_duologues.entrySet().iterator();
+
+      /*
+       * Get the current time; used to expire duologues.
+       */
+
+      final Instant now = this.clock.instant();
+
+      while (iter.hasNext()) {
+        final Map.Entry<Integer, EchoServerDuologue> entry = iter.next();
+        final EchoServerDuologue duologue = entry.getValue();
+
+        final String session_name =
+          Integer.toString(entry.getKey().intValue());
+
+        /*
+         * If the duologue has either been closed, or has expired, it needs
+         * to be deleted.
+         */
+
+        boolean delete = false;
+        if (duologue.isExpired(now)) {
+          LOG.debug("[{}] duologue expired", session_name);
+          delete = true;
+        }
+
+        if (duologue.isClosed()) {
+          LOG.debug("[{}] duologue closed", session_name);
+          delete = true;
+        }
+
+        if (delete) {
+          try {
+            duologue.close();
+          } finally {
+            LOG.debug("[{}] deleted duologue", session_name);
+            iter.remove();
+            this.port_allocator.free(duologue.portData());
+            this.port_allocator.free(duologue.portControl());
+            this.address_counter.decrement(duologue.ownerAddress());
+          }
+          continue;
+        }
+
+        /*
+         * Otherwise, poll the duologue for activity.
+         */
+
+        duologue.poll();
+      }
+    }

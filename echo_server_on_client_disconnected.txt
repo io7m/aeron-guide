@@ -1,0 +1,12 @@
+  private void onClientDisconnected(
+    final Image image)
+  {
+    final int session = image.sessionId();
+    LOG.debug("onClientDisconnected: {}", image.sourceIdentity());
+
+    try (final ServerClient client = this.clients.remove(Integer.valueOf(session))) {
+      LOG.debug("onClientDisconnected: closing client {}", client);
+    } catch (final Exception e) {
+      LOG.error("onClientDisconnected: failed to close client: ", e);
+    }
+  }

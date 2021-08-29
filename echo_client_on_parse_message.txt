@@ -1,0 +1,11 @@
+  private static void onParseMessage(
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+  {
+    final byte[] buf = new byte[length];
+    buffer.getBytes(offset, buf);
+    final String response = new String(buf, UTF_8);
+    LOG.debug("response: {}", response);
+  }

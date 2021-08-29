@@ -1,0 +1,34 @@
+  private void runEchoLoop(
+    final UnsafeBuffer buffer,
+    final String session_name,
+    final Subscription subscription,
+    final Publication publication)
+    throws IOException
+  {
+    final FragmentHandler handler =
+      new FragmentAssembler(
+        (data, offset, length, header) ->
+          onEchoResponse(session_name, data, offset, length));
+
+    while (true) {
+
+      /*
+       * Send ECHO messages to the server and wait for responses.
+       */
+
+      EchoMessages.sendMessage(
+        publication,
+        buffer,
+        "ECHO " + Long.toUnsignedString(this.random.nextLong(), 16));
+
+      for (int index = 0; index < 100; ++index) {
+        subscription.poll(handler, 1000);
+
+        try {
+          Thread.sleep(10L);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }

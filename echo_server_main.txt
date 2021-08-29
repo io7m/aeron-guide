@@ -1,0 +1,20 @@
+  public static void main(
+    final String[] args)
+    throws Exception
+  {
+    if (args.length < 3) {
+      LOG.error("usage: directory local-address local-port");
+      System.exit(1);
+    }
+
+    final Path directory = Paths.get(args[0]);
+    final InetAddress local_name = InetAddress.getByName(args[1]);
+    final Integer local_port = Integer.valueOf(args[2]);
+
+    final InetSocketAddress local_address =
+      new InetSocketAddress(local_name, local_port.intValue());
+
+    try (final EchoServer server = create(directory, local_address)) {
+      server.run();
+    }
+  }

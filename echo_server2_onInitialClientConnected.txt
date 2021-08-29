@@ -1,0 +1,9 @@
+    void onInitialClientConnected(
+      final int session_id,
+      final InetAddress client_address)
+    {
+      this.exec.assertIsExecutorThread();
+
+      this.client_session_addresses.put(
+        Integer.valueOf(session_id), client_address);
+    }

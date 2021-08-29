@@ -1,0 +1,88 @@
+public final class EchoServerSessionAllocator
+{
+  private final IntHashSet used;
+  private final SecureRandom random;
+  private final int min;
+  private final int max_count;
+
+  private EchoServerSessionAllocator(
+    final int in_min,
+    final int in_max,
+    final SecureRandom in_random)
+  {
+    if (in_max < in_min) {
+      throw new IllegalArgumentException(
+        String.format(
+          "Maximum value %d must be >= minimum value %d",
+          Integer.valueOf(in_max),
+          Integer.valueOf(in_min)));
+    }
+
+    this.used = new IntHashSet();
+    this.min = in_min;
+    this.max_count = Math.max(in_max - in_min, 1);
+    this.random = Objects.requireNonNull(in_random, "random");
+  }
+
+  /**
+   * Create a new session allocator.
+   *
+   * @param in_min    The minimum session ID (inclusive)
+   * @param in_max    The maximum session ID (exclusive)
+   * @param in_random A random number generator
+   *
+   * @return A new allocator
+   */
+
+  public static EchoServerSessionAllocator create(
+    final int in_min,
+    final int in_max,
+    final SecureRandom in_random)
+  {
+    return new EchoServerSessionAllocator(in_min, in_max, in_random);
+  }
+
+  /**
+   * Allocate a new session.
+   *
+   * @return A new session ID
+   *
+   * @throws EchoServerSessionAllocationException If there are no non-allocated sessions left
+   */
+
+  public int allocate()
+    throws EchoServerSessionAllocationException
+  {
+    if (this.used.size() == this.max_count) {
+      throw new EchoServerSessionAllocationException(
+        "No session IDs left to allocate");
+    }
+
+    for (int index = 0; index < this.max_count; ++index) {
+      final int session = this.random.nextInt(this.max_count) + this.min;
+      if (!this.used.contains(session)) {
+        this.used.add(session);
+        return session;
+      }
+    }
+
+    throw new EchoServerSessionAllocationException(
+      String.format(
+        "Unable to allocate a session ID after %d attempts (%d values in use)",
+        Integer.valueOf(this.max_count),
+        Integer.valueOf(this.used.size()),
+        Integer.valueOf(this.max_count)));
+  }
+
+  /**
+   * Free a session. After this method returns, {@code session} becomes eligible
+   * for allocation by future calls to {@link #allocate()}.
+   *
+   * @param session The session to free
+   */
+
+  public void free(final int session)
+  {
+    this.used.remove(session);
+  }
+}

@@ -1,0 +1,9 @@
+  public void run()
+    throws Exception
+  {
+    try (final Subscription sub = this.setupSubscription()) {
+      try (final Publication pub = this.setupPublication()) {
+        this.runLoop(sub, pub);
+      }
+    }
+  }

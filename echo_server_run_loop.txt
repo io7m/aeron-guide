@@ -1,0 +1,15 @@
+  private void runLoop(
+    final Subscription sub)
+    throws InterruptedException
+  {
+    final FragmentHandler assembler =
+      new FragmentAssembler(this::onParseMessage);
+
+    while (true) {
+      if (sub.isConnected()) {
+        sub.poll(assembler, 10);
+      }
+
+      Thread.sleep(100L);
+    }
+  }

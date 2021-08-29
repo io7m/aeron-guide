@@ -1,0 +1,44 @@
+  public static EchoClient create(
+    final EchoClientConfiguration configuration)
+    throws EchoClientException
+  {
+    Objects.requireNonNull(configuration, "configuration");
+
+    final String directory =
+      configuration.baseDirectory()
+        .toAbsolutePath()
+        .toString();
+
+    final MediaDriver.Context media_context =
+      new MediaDriver.Context()
+        .dirDeleteOnStart(true)
+        .publicationReservedSessionIdLow(EchoSessions.RESERVED_SESSION_ID_LOW)
+        .publicationReservedSessionIdHigh(EchoSessions.RESERVED_SESSION_ID_HIGH)
+        .aeronDirectoryName(directory);
+
+    final Aeron.Context aeron_context =
+      new Aeron.Context().aeronDirectoryName(directory);
+
+    MediaDriver media_driver = null;
+
+    try {
+      media_driver = MediaDriver.launch(media_context);
+
+      Aeron aeron = null;
+      try {
+        aeron = Aeron.connect(aeron_context);
+      } catch (final Exception e) {
+        closeIfNotNull(aeron);
+        throw e;
+      }
+
+      return new EchoClient(media_driver, aeron, configuration);
+    } catch (final Exception e) {
+      try {
+        closeIfNotNull(media_driver);
+      } catch (final Exception c_ex) {
+        e.addSuppressed(c_ex);
+      }
+      throw new EchoClientCreationException(e);
+    }
+  }

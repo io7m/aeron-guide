@@ -1,0 +1,40 @@
+  public static EchoClient create(
+    final Path media_directory,
+    final InetSocketAddress local_address,
+    final InetSocketAddress remote_address)
+    throws Exception
+  {
+    Objects.requireNonNull(media_directory, "media_directory");
+    Objects.requireNonNull(local_address, "local_address");
+    Objects.requireNonNull(remote_address, "remote_address");
+
+    final String directory =
+      media_directory.toAbsolutePath().toString();
+
+    final MediaDriver.Context media_context =
+      new MediaDriver.Context()
+        .dirDeleteOnStart(true)
+        .aeronDirectoryName(directory);
+
+    final Aeron.Context aeron_context =
+      new Aeron.Context().aeronDirectoryName(directory);
+
+    MediaDriver media_driver = null;
+
+    try {
+      media_driver = MediaDriver.launch(media_context);
+
+      Aeron aeron = null;
+      try {
+        aeron = Aeron.connect(aeron_context);
+      } catch (final Exception e) {
+        closeIfNotNull(aeron);
+        throw e;
+      }
+
+      return new EchoClient(media_driver, aeron, local_address, remote_address);
+    } catch (final Exception e) {
+      closeIfNotNull(media_driver);
+      throw e;
+    }
+  }

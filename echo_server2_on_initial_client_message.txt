@@ -1,0 +1,27 @@
+  private void onInitialClientMessage(
+    final Publication publication,
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+  {
+    final String message =
+      EchoMessages.parseMessageUTF8(buffer, offset, length);
+
+    final String session_name =
+      Integer.toString(header.sessionId());
+    final Integer session_boxed =
+      Integer.valueOf(header.sessionId());
+
+    this.executor.execute(() -> {
+      try {
+        this.clients.onInitialClientMessageProcess(
+          publication,
+          session_name,
+          session_boxed,
+          message);
+      } catch (final Exception e) {
+        LOG.error("could not process client message: ", e);
+      }
+    });
+  }

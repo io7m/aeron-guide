@@ -1,0 +1,8 @@
+  private Publication setupAllClientsPublication()
+  {
+    return EchoChannels.createPublicationDynamicMDC(
+      this.aeron,
+      this.configuration.localAddress(),
+      this.configuration.localInitialControlPort(),
+      ECHO_STREAM_ID);
+  }

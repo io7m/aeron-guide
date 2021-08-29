@@ -1,0 +1,45 @@
+  public void run()
+    throws EchoClientException
+  {
+    /*
+     * Generate a one-time pad.
+     */
+
+    this.duologue_key = this.random.nextInt();
+
+    final UnsafeBuffer buffer =
+      new UnsafeBuffer(BufferUtil.allocateDirectAligned(1024, 16));
+
+    final String session_name;
+    try (final Subscription subscription = this.setupAllClientsSubscription()) {
+      try (final Publication publication = this.setupAllClientsPublication()) {
+
+        /*
+         * Send a one-time pad to the server.
+         */
+
+        EchoMessages.sendMessage(
+          publication,
+          buffer,
+          "HELLO " + Integer.toUnsignedString(this.duologue_key, 16).toUpperCase());
+
+        session_name = Integer.toString(publication.sessionId());
+        this.waitForConnectResponse(subscription, session_name);
+      } catch (final IOException e) {
+        throw new EchoClientIOException(e);
+      }
+    }
+
+    /*
+     * Connect to the publication and subscription that the server has sent
+     * back to this client.
+     */
+
+    try (final Subscription subscription = this.setupConnectSubscription()) {
+      try (final Publication publication = this.setupConnectPublication()) {
+        this.runEchoLoop(buffer, session_name, subscription, publication);
+      } catch (final IOException e) {
+        throw new EchoClientIOException(e);
+      }
+    }
+  }

@@ -1,0 +1,2548 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.1//EN"
+  "http://www.w3.org/TR/xhtml-basic/xhtml-basic11.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en">
+  <head>
+    <title>Aeron For The Working Programmer</title>
+    <link rel="stylesheet" type="text/css" href="reset.css"/>
+    <link rel="stylesheet" type="text/css" href="document.css"/>
+  </head>
+  <body>
+    <div class="brand">
+      <a href="http://io7m.com/">io7m</a> | archive (<a href="document.zip">zip</a>, <a href="document.zip.asc">signature</a>)
+    </div>
+    <div><ul>
+<li><a href="#aeron-for-the-working-programmer"><span class="toc-section-number">1</span> Aeron For The Working Programmer</a>
+<ul>
+<li><a href="#overview"><span class="toc-section-number">1.1</span> Overview</a></li>
+</ul></li>
+<li><a href="#concepts"><span class="toc-section-number">2</span> Concepts</a>
+<ul>
+<li><a href="#publications-and-subscriptions"><span class="toc-section-number">2.1</span> Publications And Subscriptions</a></li>
+<li><a href="#media-driver"><span class="toc-section-number">2.2</span> Media Driver</a></li>
+</ul></li>
+<li><a href="#client_server_take_1"><span class="toc-section-number">3</span> A Client And Server (Take 1)</a>
+<ul>
+<li><a href="#echo-client"><span class="toc-section-number">3.1</span> Echo Client</a></li>
+<li><a href="#echo-server"><span class="toc-section-number">3.2</span> Echo Server</a></li>
+<li><a href="#implementation-weaknesses"><span class="toc-section-number">3.3</span> Implementation Weaknesses</a>
+<ul>
+<li><a href="#weak_client_disconnections"><span class="toc-section-number">3.3.1</span> EchoClient Server Disconnections</a></li>
+<li><a href="#weak_mtu"><span class="toc-section-number">3.3.2</span> MTU Handling Is Implicit</a></li>
+<li><a href="#weak_client_bad_messages"><span class="toc-section-number">3.3.3</span> Clients Sending Bad Messages Are Not Killed</a></li>
+<li><a href="#weak_message_sending_not_robust"><span class="toc-section-number">3.3.4</span> Message Sending Is Not Robust</a></li>
+<li><a href="#weak_thread"><span class="toc-section-number">3.3.5</span> Work Takes Place On Aeron Threads</a></li>
+<li><a href="#weak_nat"><span class="toc-section-number">3.3.6</span> EchoClient Cannot Be Behind NAT</a></li>
+</ul></li>
+</ul></li>
+<li><a href="#client_server_take_2"><span class="toc-section-number">4</span> A Client And Server (Take 2)</a>
+<ul>
+<li><a href="#multi-destination-cast"><span class="toc-section-number">4.1</span> Multi-Destination-Cast</a></li>
+<li><a href="#threat_model"><span class="toc-section-number">4.2</span> Security Requirements</a></li>
+<li><a href="#echo-2.0-outline"><span class="toc-section-number">4.3</span> Echo 2.0 Outline</a></li>
+<li><a href="#echo-2.0-specification"><span class="toc-section-number">4.4</span> Echo 2.0 Specification</a></li>
+<li><a href="#echo-2.0-server"><span class="toc-section-number">4.5</span> Echo 2.0 Server</a></li>
+<li><a href="#echo-2.0-client"><span class="toc-section-number">4.6</span> Echo 2.0 Client</a></li>
+<li><a href="#example-usage"><span class="toc-section-number">4.7</span> Example Usage</a></li>
+</ul></li>
+<li><a href="#further-enhancements"><span class="toc-section-number">5</span> Further Enhancements</a>
+<ul>
+<li><a href="#ipv6"><span class="toc-section-number">5.1</span> IPv6</a></li>
+<li><a href="#endpoint-level-filtering"><span class="toc-section-number">5.2</span> Endpoint-level Filtering</a></li>
+<li><a href="#per-packet-encryption"><span class="toc-section-number">5.3</span> Per-packet Encryption</a></li>
+</ul></li>
+</ul></div>
+    <div><section id="aeron-for-the-working-programmer" class="level1" data-number="1">
+<h1 data-number="1"><span class="header-section-number">1</span> Aeron For The Working Programmer</h1>
+<section id="overview" class="level2" data-number="1.1">
+<h2 data-number="1.1"><span class="header-section-number">1.1</span> Overview</h2>
+<p><a href="https://github.com/real-logic/Aeron">Aeron</a> is an ultra-efficient message transport library for Java and C++. It is designed to work over unreliable media protocols such as UDP and Infiniband, and offers ordered messaging and optional reliability (by retransmission of messages in the case of dropped packets). The design and implementation has an extreme emphasis on low-latency communication, making the library ideal for use in applications with realtime requirements such as fast-paced networked multiplayer games, high frequency financial trading, VOIP, video streaming, etc. In particular, the Java implementation is designed such that it will produce no garbage during steady state execution, reducing memory pressure and work for the collector.</p>
+<p>This guide is an attempt to describe how to put together a working server that can serve a number of clients concurrently. It is somewhat biased towards the perspective of a developer using Aeron as the networking component of a client/server multiplayer game engine. Specifically, the intention is that the described server configuration will serve a relatively small number of clients (typically less than a hundred) concurrently as opposed to serving the tens of thousands of clients concurrently that might be expected of a high-performance web server <a href="#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a>.</p>
+<p>This guide is intended to supplement the existing <a href="https://github.com/real-logic/aeron/wiki/Java-Programming-Guide">Java programming guide</a>. Familiarity with networking and UDP sockets is assumed, but no prior experience with Aeron is assumed. See the following documents for details:</p>
+<ul>
+<li><a href="https://github.com/real-logic/aeron/wiki/Java-Programming-Guide">Java programming guide</a></li>
+<li><a href="https://github.com/real-logic/aeron/wiki/Protocol-Specification">Aeron protocol specification</a></li>
+<li><a href="https://github.com/real-logic/aeron/wiki/Design-Overview">Aeron design overview</a></li>
+</ul>
+</section>
+</section>
+<section id="concepts" class="level1" data-number="2">
+<h1 data-number="2"><span class="header-section-number">2</span> Concepts</h1>
+<section id="publications-and-subscriptions" class="level2" data-number="2.1">
+<h2 data-number="2.1"><span class="header-section-number">2.1</span> Publications And Subscriptions</h2>
+<p>The Aeron library works with unidirectional streams of messages known as <em>publications</em> and <em>subscriptions</em>. Intuitively, a <em>publication</em> is a stream of messages to which you can <em>write</em>, and a <em>subscription</em> is a stream of messages from which you can <em>read</em>. This requires a slight adjustment in the way one would usually think about programming within the context of, say, UDP sockets. UDP sockets are bidirectional; the programmer will usually create a UDP socket, bind it to a local address, and then read from that socket to receive datagrams, and write datagrams to that same socket to send messages to peers. Aeron, in contrast, requires the programmer to create separate pairs of publications and subscriptions to write and read messages to and from peers.</p>
+</section>
+<section id="media-driver" class="level2" data-number="2.2">
+<h2 data-number="2.2"><span class="header-section-number">2.2</span> Media Driver</h2>
+<p>Aeron defines a protocol on top of which the user is expected to implement their own application-specific message protocol. The Aeron protocol handles the details of message transmission, retransmission, ordering, fragmentation, etc, leaving the application free to send whatever messages it needs without having to worry about ensuring those messages actually arrive and arrive in the right order.</p>
+<p>The actual low-level handling of the transmission medium (such as UDP sockets) is handled by a module of code known as the <em>media driver</em>. The media driver can be either run standalone as a separate process, or can be embedded within the application. For the examples presented in this guide, we assume that the media driver will be embedded within the application and, therefore, the application is responsible for configuring, starting up, and shutting down the media driver correctly.</p>
+</section>
+</section>
+<section id="client_server_take_1" class="level1" data-number="3">
+<h1 data-number="3"><span class="header-section-number">3</span> A Client And Server (Take 1)</h1>
+<p>As a first step, we’ll write a trivial <code>echo</code> server and client: Clients can connect to the server and send UTF-8 strings, and the server will send them back. More formally, the client will:</p>
+<ol type="1">
+<li><p>Send an initial string <code>HELLO &lt;port&gt;</code>, where <code>&lt;port&gt;</code> is an unsigned decimal integer indicating the port to which responses from the server should be sent.</p></li>
+<li><p>If the initial <code>HELLO</code> string has been sent, the client will send an infinite series of arbitrary unsigned 32-bit decimal integers encoded as UTF-8 strings, one string per second.</p></li>
+</ol>
+<p>The server will:</p>
+<ol type="1">
+<li><p>Wait for a client to connect and then read the initial <code>HELLO &lt;port&gt;</code> message.</p></li>
+<li><p>For each connected client <code>c</code>, the server will read a string <code>s</code> from <code>c</code> and then send back the exact same string <code>s</code> to the source address of <code>c</code> and the port <code>p</code> that <code>c</code> specified in its initial <code>HELLO</code> string.</p></li>
+</ol>
+<p>We’ll step through the simplest possible implementation that can work, and then critically assess it with an eye to producing a second, better implementation. No attempt will be made to produce efficient code: We are, after all, sending UTF-8 strings as messages; There <em>will</em> be allocations! For this example code, if any choice must be made between efficiency, correctness, or simplicity, simplicity will be chosen every time.</p>
+<p>In order to write a server, the following steps are required:</p>
+<ol type="1">
+<li>Start up the media driver.</li>
+<li>Create a subscription that will be used to read messages from clients.</li>
+<li>Go into a loop, creating new publications/subscriptions for clients as they connect, and reading/writing messages from/to existing clients.</li>
+</ol>
+<p>In order to write a client, the following steps are required:</p>
+<ol type="1">
+<li>Start up the media driver.</li>
+<li>Create a publication that will be used to send messages to the server.</li>
+<li>Go into a loop, sending messages to the server and reading back the responses.</li>
+</ol>
+<p>For the sake of simplicity, we’ll write the client first. All of the code presented here is available as a Maven project on <a href="https://github.com/io7m/aeron-guide">GitHub</a>, but excerpts will be printed here for explanatory purposes.</p>
+<section id="echo-client" class="level2" data-number="3.1">
+<h2 data-number="3.1"><span class="header-section-number">3.1</span> Echo Client</h2>
+<p>We start by defining an <code>EchoClient</code> class with a static <code>create</code> method that initializes a media driver and an instance of the Aeron library to go with it. The media driver requires a directory on the filesystem within which it creates various temporary files that are memory-mapped to allow efficient thread-safe communication between the separate components of the library. For best results, this directory should reside on a memory-backed filesystem (such as <code>/dev/shm</code> on Linux), but this is not actually required.</p>
+<p>The <code>create</code> method we define simply creates and launches Aeron and the media driver. It also takes the local address that the client will use for communication, and the address of the server to which the client will connect. It passes these addresses on to the constructor for later use.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L71">EchoClient.create()</a></p>
+<pre data-include="out/aeron-guide/echo_client_create.txt"><code>  public static EchoClient create(
+    final Path media_directory,
+    final InetSocketAddress local_address,
+    final InetSocketAddress remote_address)
+    throws Exception
+  {
+    Objects.requireNonNull(media_directory, &quot;media_directory&quot;);
+    Objects.requireNonNull(local_address, &quot;local_address&quot;);
+    Objects.requireNonNull(remote_address, &quot;remote_address&quot;);
+
+    final String directory =
+      media_directory.toAbsolutePath().toString();
+
+    final MediaDriver.Context media_context =
+      new MediaDriver.Context()
+        .dirDeleteOnStart(true)
+        .aeronDirectoryName(directory);
+
+    final Aeron.Context aeron_context =
+      new Aeron.Context().aeronDirectoryName(directory);
+
+    MediaDriver media_driver = null;
+
+    try {
+      media_driver = MediaDriver.launch(media_context);
+
+      Aeron aeron = null;
+      try {
+        aeron = Aeron.connect(aeron_context);
+      } catch (final Exception e) {
+        closeIfNotNull(aeron);
+        throw e;
+      }
+
+      return new EchoClient(media_driver, aeron, local_address, remote_address);
+    } catch (final Exception e) {
+      closeIfNotNull(media_driver);
+      throw e;
+    }
+  }
+</code></pre>
+<p>The various <code>Context</code> types contain a wealth of configuration options. For the sake of this example, we’re only interested in setting the directory locations and will otherwise use the default settings.</p>
+<p>Because the <code>EchoClient</code> class is the one responsible for starting up the media driver, it’s also responsible for shutting down the media driver and Aeron when necessary. It implements the standard <code>java.io.Closeable</code> interface and does the necessary cleanup in the <code>close</code> method.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L239">EchoClient.close()</a></p>
+<pre data-include="out/aeron-guide/echo_client_close.txt"><code>  public void close()
+  {
+    this.aeron.close();
+    this.media_driver.close();
+  }
+</code></pre>
+<p>Now we need to define a simple (blocking) <code>run</code> method that attempts to connect to the server and then goes into an infinite loop sending and receiving messages. For the sake of producing readable output, we’ll limit to polling for messages once per second. In real applications with low-latency requirements, this would obviously be completely counterproductive and a more sensible delay would be used <a href="#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a>. The method is constructed from several parts, so we’ll define each of those as their own methods and then compose them at the end.</p>
+<p>Firstly, we need to create a <em>subscription</em> that will be used to receive messages from the remote server. This is somewhat analogous, for those familiar with UDP programming, to opening a UDP socket and binding it to a local address and port. We create the subscription by constructing a <a href="https://github.com/real-logic/aeron/wiki/Channel-Configuration">channel URI</a> based on the local address given in the <code>create</code> method. We use the convenient <code>ChannelUriStringBuilder</code> class to create a URI string specifying the details of the subscription. We state that we want to use <code>udp</code> as the underlying transport, and that we want the channel to be <em>reliable</em> (meaning that lost messages will be retransmitted, and messages will be delivered to the remote side in the order that they were sent). We also specify a <a href="https://github.com/real-logic/aeron/wiki/Protocol-Specification#stream-setup">stream ID</a> when creating the subscription. Aeron is capable of multiplexing several independent <em>streams</em> of messages into a single connection. It’s therefore necessary for the client and server to agree on a stream ID that will be used for communcation. In this case we simply pick an arbitrary value of <code>0x2044f002</code>, but any non-zero 32-bit unsigned value can be used; the choice is entirely up to the application.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L226">EchoClient.setupSubscription()</a></p>
+<pre data-include="out/aeron-guide/echo_client_setup_sub.txt"><code>  private Subscription setupSubscription()
+  {
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(this.local_address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;))
+        .build();
+
+    LOG.debug(&quot;subscription URI: {}&quot;, sub_uri);
+    return this.aeron.addSubscription(sub_uri, ECHO_STREAM_ID);
+  }
+</code></pre>
+<p>If, for this example, we assume a client at <code>10.10.1.100</code> using a local port <code>8000</code>, the resulting channel URI will look something like:</p>
+<pre><code>aeron:udp?endpoint=10.10.1.100:8000|reliable=true</code></pre>
+<p>We then create a <em>publication</em> that will be used to send messages to the server. The procedure for creating the publication is very similar to that of the <em>subscription</em>, so the explanation won’t be repeated here.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L213">EchoClient.setupPublication()</a></p>
+<pre data-include="out/aeron-guide/echo_client_setup_pub.txt"><code>  private Publication setupPublication()
+  {
+    final String pub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(this.remote_address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;))
+        .build();
+
+    LOG.debug(&quot;publication URI: {}&quot;, pub_uri);
+    return this.aeron.addPublication(pub_uri, ECHO_STREAM_ID);
+  }
+</code></pre>
+<p>If, for this example, we assume a server at <code>10.10.1.200</code> using a local port <code>9000</code>, the resulting channel URI will look something like:</p>
+<pre><code>aeron:udp?endpoint=10.10.1.200:9000|reliable=true</code></pre>
+<p>We now define a <code>runLoop</code> method that takes a created publication and subscription and simply loops forever, sending and receiving messages.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L131">EchoClient.runLoop()</a></p>
+<pre data-include="out/aeron-guide/echo_client_run_loop.txt"><code>  private void runLoop(
+    final Subscription sub,
+    final Publication pub)
+    throws InterruptedException
+  {
+    final UnsafeBuffer buffer =
+      new UnsafeBuffer(BufferUtil.allocateDirectAligned(2048, 16));
+
+    final Random random = new Random();
+
+    /*
+     * Try repeatedly to send an initial HELLO message
+     */
+
+    while (true) {
+      if (pub.isConnected()) {
+        if (sendMessage(pub, buffer, &quot;HELLO &quot; + this.local_address.getPort())) {
+          break;
+        }
+      }
+
+      Thread.sleep(1000L);
+    }
+
+    /*
+     * Send an infinite stream of random unsigned integers.
+     */
+
+    final FragmentHandler assembler =
+      new FragmentAssembler(EchoClient::onParseMessage);
+
+    while (true) {
+      if (pub.isConnected()) {
+        sendMessage(pub, buffer, Integer.toUnsignedString(random.nextInt()));
+      }
+      if (sub.isConnected()) {
+        sub.poll(assembler, 10);
+      }
+      Thread.sleep(1000L);
+    }
+  }
+</code></pre>
+<p>The method first creates a buffer that will be used to store incoming and outgoing data. Some of the ways in which Aeron achieves a very high degree of performance include using native memory, allocating memory up-front in order to avoid producing garbage during steady-state execution, and eliminating buffer copying as much as is possible on the JVM. In order to assist with this, we allocate a <code>2KiB</code> direct byte buffer (with <code>16</code> byte alignment) to store messages, and use the <code>UnsafeBuffer</code> class from Aeron’s associated data structure package <a href="https://github.com/real-logic/Agrona">Agrona</a> to get very high-performance (unsafe) memory operations on the given buffer.</p>
+<p>The method then sends a string <code>HELLO &lt;port&gt;</code> where <code>&lt;port&gt;</code> is replaced with the port number used to create the <em>subscription</em> earlier. The server is required to address responses to this port and so those will be made available on the <em>subscription</em> that the client opened.</p>
+<p>The method then loops forever, polling the subscription for new messages, and sending a random integer string to the publication, waiting for a second at each iteration.</p>
+<p>The <code>sendMessage</code> method is a more-or-less uninteresting utility method that simply packs the given string into the buffer we allocated at the start of the method. It does not do any particular error handling: Message sending can fail for the reasons given in the documentation for the <code>Publication.offer()</code> method, and real applications should do the appropriate error handling <a href="#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a>. Our implementation simply tries to write a message, retrying up to five times in total, before giving up. The method returns <code>true</code> if the message was sent, and logs an error message and returns <code>false</code> otherwise. Better approaches for real applications are <a href="#weak_message_sending_not_robust">discussed later</a>.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L185">EchoClient.sendMessage()</a></p>
+<pre data-include="out/aeron-guide/echo_client_send_message.txt"><code>  private static boolean sendMessage(
+    final Publication pub,
+    final UnsafeBuffer buffer,
+    final String text)
+  {
+    LOG.debug(&quot;send: {}&quot;, text);
+
+    final byte[] value = text.getBytes(UTF_8);
+    buffer.putBytes(0, value);
+
+    long result = 0L;
+    for (int index = 0; index &lt; 5; ++index) {
+      result = pub.offer(buffer, 0, text.length());
+      if (result &lt; 0L) {
+        try {
+          Thread.sleep(100L);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        continue;
+      }
+      return true;
+    }
+
+    LOG.error(&quot;could not send: {}&quot;, Long.valueOf(result));
+    return false;
+  }
+</code></pre>
+<p>The <code>poll</code> method, defined on the <code>Subscription</code> type, takes a function of type <code>FragmentHandler</code> as an argument. In our case, we pass an Aeron-provided implementation of the <code>FragmentHandler</code> type called <code>FragmentAssembler</code>. The <code>FragmentAssembler</code> class handles the reassembly of fragmented messages and then passes the assembled messages to our own <code>FragmentHandler</code> (in this case, the <code>onParseMessage</code> method). Our code is extremely unlikely to ever send or receive a message that could have exceeded the <a href="https://en.wikipedia.org/wiki/Maximum_transmission_unit">MTU</a> of the underlying UDP transport. If it does happen, the <code>FragmentAssembler</code> takes care of it.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L173">EchoClient.onParseMessage()</a></p>
+<pre data-include="out/aeron-guide/echo_client_on_parse_message.txt"><code>  private static void onParseMessage(
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+  {
+    final byte[] buf = new byte[length];
+    buffer.getBytes(offset, buf);
+    final String response = new String(buf, UTF_8);
+    LOG.debug(&quot;response: {}&quot;, response);
+  }
+</code></pre>
+<p>Now that we have all of the required pieces, the <code>run</code> method is trivial:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L121">EchoClient.run()</a></p>
+<pre data-include="out/aeron-guide/echo_client_run.txt"><code>  public void run()
+    throws Exception
+  {
+    try (final Subscription sub = this.setupSubscription()) {
+      try (final Publication pub = this.setupPublication()) {
+        this.runLoop(sub, pub);
+      }
+    }
+  }
+</code></pre>
+<p>This is the bare minimum that is required to have a working client. For ease of testing, a simple <code>main</code> method can be defined that takes command line arguments:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoClient.java#L246">EchoClient.main()</a></p>
+<pre data-include="out/aeron-guide/echo_client_main.txt"><code>  public static void main(
+    final String[] args)
+    throws Exception
+  {
+    if (args.length &lt; 5) {
+      LOG.error(&quot;usage: directory local-address local-port remote-address remote-port&quot;);
+      System.exit(1);
+    }
+
+    final Path directory = Paths.get(args[0]);
+    final InetAddress local_name = InetAddress.getByName(args[1]);
+    final Integer local_port = Integer.valueOf(args[2]);
+    final InetAddress remote_name = InetAddress.getByName(args[3]);
+    final Integer remote_port = Integer.valueOf(args[4]);
+
+    final InetSocketAddress local_address =
+      new InetSocketAddress(local_name, local_port.intValue());
+    final InetSocketAddress remote_address =
+      new InetSocketAddress(remote_name, remote_port.intValue());
+
+    try (final EchoClient client = create(directory, local_address, remote_address)) {
+      client.run();
+    }
+  }
+</code></pre>
+</section>
+<section id="echo-server" class="level2" data-number="3.2">
+<h2 data-number="3.2"><span class="header-section-number">3.2</span> Echo Server</h2>
+<p>The design of the server is not radically different to that of the client. The main differences are in when and where publications and subscriptions are created. The client simply opens a publication/subscription pair to the only peer with which it will communicate (the server) and maintains them until the user has had enough. The server, however, needs to create publications and/or subscriptions in response to clients connecting, and needs to be able to address clients individually in order to send responses.</p>
+<p>We structure the <code>EchoServer</code> server similarly to the <code>EchoClient</code> including the static <code>create</code> method that sets up Aeron and the media driver. The only difference is that the server does not have a <em>remote address</em> as part of its configuration information; it only specifies a local address to which clients will connect.</p>
+<p>The <code>run</code> method, however, is different in several aspects.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L301">EchoServer.setupSubscription()</a></p>
+<pre data-include="out/aeron-guide/echo_server_setup_sub.txt"><code>  private Subscription setupSubscription()
+  {
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(this.local_address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;))
+        .build();
+
+    LOG.debug(&quot;subscription URI: {}&quot;, sub_uri);
+    return this.aeron.addSubscription(
+      sub_uri,
+      ECHO_STREAM_ID,
+      this::onClientConnected,
+      this::onClientDisconnected);
+  }
+</code></pre>
+<p>The <em>subscription</em> configured by the server is augmented with a pair of <em>image</em> handlers. An <em>image</em>, in Aeron terminology, is the replication of a <em>publication</em> stream on the <em>subscription</em> side. In other words, when a client creates a <em>publication</em> to talk to the server, the server obtains an <em>image</em> of the client’s <em>publication</em> that contains a <em>subscription</em> from which the server can read. When the client writes a message to its <em>publication</em>, the server can read a message from the <em>subscription</em> in the <em>image</em>.</p>
+<p>When an <em>image</em> becomes available, this is our indication that a client has connected. When an <em>image</em> becomes unavailable, this is our indication that a client has disconnected.</p>
+<p>We provide the subscription with pair of method references, <code>this::onClientConnected</code> and <code>this::onClientDisconnected</code>, that will be called when an <em>image</em> becomes available and unavailable, respectively.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L331">EchoServer.onClientConnected()</a></p>
+<pre data-include="out/aeron-guide/echo_server_on_client_connected.txt"><code>  private void onClientConnected(
+    final Image image)
+  {
+    final int session = image.sessionId();
+    LOG.debug(&quot;onClientConnected: {}&quot;, image.sourceIdentity());
+
+    this.clients.put(
+      Integer.valueOf(session),
+      new ServerClient(session, image, this.aeron));
+  }
+</code></pre>
+<p>When an <em>image</em> becomes available, we take note of the <em>session ID</em> of the <em>image</em>. This can be effectively used to uniquely identify a client with respect to that particular <em>subscription</em>. We create a new instance of a <code>ServerClient</code> class used to store per-client state on the server, and store it in map associating <em>session IDs</em> with <code>ServerClient</code> instances. The details of the <code>ServerClient</code> class will be discussed shortly.</p>
+<p>Similarly, in the <code>onClientDisconnected</code> method, we find the client that appears to be disconnecting using the <em>session ID</em> of the <em>image</em>, call the <code>close</code> method on the corresponding <code>ServerClient</code> instance, assuming that one exists, and remove <code>ServerClient</code> instance from the table of clients.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L318">EchoServer.onClientDisconnected()</a></p>
+<pre data-include="out/aeron-guide/echo_server_on_client_disconnected.txt"><code>  private void onClientDisconnected(
+    final Image image)
+  {
+    final int session = image.sessionId();
+    LOG.debug(&quot;onClientDisconnected: {}&quot;, image.sourceIdentity());
+
+    try (final ServerClient client = this.clients.remove(Integer.valueOf(session))) {
+      LOG.debug(&quot;onClientDisconnected: closing client {}&quot;, client);
+    } catch (final Exception e) {
+      LOG.error(&quot;onClientDisconnected: failed to close client: &quot;, e);
+    }
+  }
+</code></pre>
+<p>The server does not create a <em>publication</em> in the <code>run</code> method as the client did: It defers the creation of <em>publications</em> until clients have connected for reasons that will be discussed shortly.</p>
+<p>The complete <code>run</code> method, therefore, looks like this:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L224">EchoServer.run()</a></p>
+<pre data-include="out/aeron-guide/echo_server_run.txt"><code>  public void run()
+    throws Exception
+  {
+    try (final Subscription sub = this.setupSubscription()) {
+      this.runLoop(sub);
+    }
+  }
+</code></pre>
+<p>The <code>runLoop</code> method on the server is simplified when compared to the analogous method on the client. The method simply polls the main subscription repeatedly:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L232">EchoServer.runLoop()</a></p>
+<pre data-include="out/aeron-guide/echo_server_run_loop.txt"><code>  private void runLoop(
+    final Subscription sub)
+    throws InterruptedException
+  {
+    final FragmentHandler assembler =
+      new FragmentAssembler(this::onParseMessage);
+
+    while (true) {
+      if (sub.isConnected()) {
+        sub.poll(assembler, 10);
+      }
+
+      Thread.sleep(100L);
+    }
+  }
+</code></pre>
+<p>The main difference is the work that now takes place in the <code>onParseMessage</code> method:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L248">EchoServer.onParseMessage()</a></p>
+<pre data-include="out/aeron-guide/echo_server_on_parse_message.txt"><code>  private void onParseMessage(
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+  {
+    final int session = header.sessionId();
+
+    final ServerClient client = this.clients.get(Integer.valueOf(session));
+    if (client == null) {
+      LOG.warn(
+        &quot;received message from unknown client: {}&quot;,
+        Integer.valueOf(session));
+      return;
+    }
+
+    final byte[] buf = new byte[length];
+    buffer.getBytes(offset, buf);
+    final String message = new String(buf, UTF_8);
+    client.onReceiveMessage(message);
+  }
+</code></pre>
+<p>We first take the <em>session ID</em> provided to us by the <code>Header</code> value passed to us by Aeron. The <em>session ID</em> is used to look up a client in the table of clients populated by the <code>onClientConnected</code> method. Assuming that a client actually exists with a matching <em>session ID</em>, a UTF-8 string is decoded from the buffer as it is in the <code>EchoClient</code> implementation, but the decoded string is then given to the corresponding <code>ServerClient</code> instance to be processed via its <code>onReceiveMessage</code> method.</p>
+<p>Due to the small size of the <code>ServerClient</code> class (it effectively only contains a single method that does interesting work), the code is published here in its entirety:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L63">EchoServer.ServerClient</a></p>
+<pre data-include="out/aeron-guide/echo_server_server_client.txt"><code>  private static final class ServerClient implements AutoCloseable
+  {
+    private static final Pattern HELLO_PATTERN =
+      Pattern.compile(&quot;HELLO ([0-9]+)&quot;);
+
+    private enum State
+    {
+      INITIAL,
+      CONNECTED
+    }
+
+    private final int session;
+    private final Image image;
+    private final Aeron aeron;
+    private State state;
+    private final UnsafeBuffer buffer;
+    private Publication publication;
+
+    ServerClient(
+      final int session,
+      final Image in_image,
+      final Aeron in_aeron)
+    {
+      this.session = session;
+      this.image = Objects.requireNonNull(in_image, &quot;image&quot;);
+      this.aeron = Objects.requireNonNull(in_aeron, &quot;aeron&quot;);
+      this.state = State.INITIAL;
+      this.buffer = new UnsafeBuffer(
+        BufferUtil.allocateDirectAligned(2048, 16));
+    }
+
+    @Override
+    public void close()
+      throws Exception
+    {
+      closeIfNotNull(this.publication);
+    }
+
+    public void onReceiveMessage(
+      final String message)
+    {
+      Objects.requireNonNull(message, &quot;message&quot;);
+
+      LOG.debug(
+        &quot;receive [0x{}]: {}&quot;,
+        Integer.toUnsignedString(this.session),
+        message);
+
+      switch (this.state) {
+        case INITIAL: {
+          this.onReceiveMessageInitial(message);
+          break;
+        }
+        case CONNECTED: {
+          sendMessage(this.publication, this.buffer, message);
+          break;
+        }
+      }
+    }
+
+    private void onReceiveMessageInitial(
+      final String message)
+    {
+      final Matcher matcher = HELLO_PATTERN.matcher(message);
+      if (!matcher.matches()) {
+        LOG.warn(&quot;client sent malformed HELLO message: {}&quot;, message);
+        return;
+      }
+
+      final int port =
+        Integer.parseUnsignedInt(matcher.group(1));
+      final String source_id =
+        this.image.sourceIdentity();
+
+      try {
+        final URI source_uri =
+          new URI(&quot;fake://&quot; + source_id);
+
+        final String address =
+          new StringBuilder(64)
+            .append(source_uri.getHost())
+            .append(&quot;:&quot;)
+            .append(port)
+            .toString();
+
+        final String pub_uri =
+          new ChannelUriStringBuilder()
+            .reliable(TRUE)
+            .media(&quot;udp&quot;)
+            .endpoint(address)
+            .build();
+
+        this.publication =
+          this.aeron.addPublication(pub_uri, ECHO_STREAM_ID);
+
+        this.state = State.CONNECTED;
+      } catch (final URISyntaxException e) {
+        LOG.warn(&quot;client sent malformed HELLO message: {}: &quot;, message, e);
+      }
+    }
+  }
+</code></pre>
+<p>The <code>ServerClient</code> class maintains a <code>State</code> field which may either be <code>CONNECTED</code> or <code>INITIAL</code>. The client begins in the <code>INITIAL</code> state and then transitions to the <code>CONNECTED</code> state after successfully processing the <code>HELLO</code> string that is <a href="#client_server_take_1">expected to be sent by connecting clients as their first message</a>. The <code>onReceiveMessage</code> method checks to see if the client is in the <code>INITIAL</code> state or the <code>CONNECTED</code> state. If the client is in the <code>INITIAL</code> state, the message is passed to the <code>onReceiveMessageInitial</code> method. This method parses what it assumes will be a <code>HELLO</code> string and constructs a new <em>publication</em> that will be used to send messages back to the client. Aeron provides us with both the source address of the client and the ephemeral port the client used to send the message we just received via the <code>Image.sourceIdentity()</code> method. However, we cannot send messages back to the ephemeral port the client used: We need to send messages to the port the client specified in the <code>HELLO</code> message so that they are readable via the <em>subscription</em> the client created in <code>EchoClient.setupSubscription()</code> for that purpose.</p>
+<p>When using UDP as a transport, the result of the <code>sourceIdentity()</code> call will be a string of the form <code>ip-address:port</code>. For a client at <code>10.10.1.200</code> using an arbitrary high-numbered ephemeral UDP port, the string may look something like <code>10.10.1.200:53618</code>. The simplest way to parse a string of this form is to simply delegate parsing to the standard <code>java.net.URI</code> class. We do this by constructing a URI containing the original address and port <a href="#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a>, extracting the IP address from the resulting <code>URI</code> value, substituting the port specified by the client in the <code>HELLO</code> string, and then opening a new <em>publication</em> in a way that should now be familiar.</p>
+<p>Assuming that all of this proceeds without issue, the client is moved to the <code>CONNECTED</code> state and the method returns. From that point on, any message received by that particular client instance will be sent back to the client via the newly created <em>publication</em>.</p>
+<p>At this point, we appear to have a working client and server. An additional <code>main</code> method is added to the server to help with testing from the command line:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take1/EchoServer.java#L349">EchoServer.main()</a></p>
+<pre data-include="out/aeron-guide/echo_server_main.txt"><code>  public static void main(
+    final String[] args)
+    throws Exception
+  {
+    if (args.length &lt; 3) {
+      LOG.error(&quot;usage: directory local-address local-port&quot;);
+      System.exit(1);
+    }
+
+    final Path directory = Paths.get(args[0]);
+    final InetAddress local_name = InetAddress.getByName(args[1]);
+    final Integer local_port = Integer.valueOf(args[2]);
+
+    final InetSocketAddress local_address =
+      new InetSocketAddress(local_name, local_port.intValue());
+
+    try (final EchoServer server = create(directory, local_address)) {
+      server.run();
+    }
+  }
+</code></pre>
+<p>Executing the server and a client from the command line produces the expected output:</p>
+<pre><code>server$ java -classpath target/com.io7m.aeron-guide-0.0.1.jar com.io7m.aeron_guide.take1.EchoServer /tmp/aeron-server 10.10.1.100 9000
+20:26:47.070 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - subscription URI: aeron:udp?endpoint=10.10.1.100:9000|reliable=true
+20:28:09.981 [aeron-client-conductor] DEBUG com.io7m.aeron_guide.take1.EchoServer - onClientConnected: 10.10.1.100:44501
+20:28:10.988 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - receive [0x896291375]: HELLO 8000
+20:28:11.049 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - receive [0x896291375]: 2745822766
+20:28:11.050 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - send: [session 0x562238613] 2745822766
+20:28:11.953 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - receive [0x896291375]: 1016181810
+20:28:11.953 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - send: [session 0x562238613] 1016181810
+20:28:12.955 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - receive [0x896291375]: 296510575
+20:28:12.955 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - send: [session 0x562238613] 296510575
+20:28:13.957 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - receive [0x896291375]: 3276793170
+20:28:13.957 [main] DEBUG com.io7m.aeron_guide.take1.EchoServer - send: [session 0x562238613] 3276793170
+
+client$ java -classpath target/com.io7m.aeron-guide-0.0.1.jar com.io7m.aeron_guide.take1.EchoClient /tmp/aeron-client0 10.10.1.100 8000 10.10.1.100 9000
+20:28:09.826 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - subscription URI: aeron:udp?endpoint=10.10.1.100:8000|reliable=true
+20:28:09.846 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - publication URI: aeron:udp?endpoint=10.10.1.100:9000|reliable=true
+20:28:10.926 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - send: HELLO 8000
+20:28:10.927 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - send: 2745822766
+20:28:11.928 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - send: 1016181810
+20:28:11.933 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - response: 2745822766
+20:28:12.934 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - send: 296510575
+20:28:12.934 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - response: 1016181810
+20:28:13.935 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - send: 3276793170
+20:28:13.935 [main] DEBUG com.io7m.aeron_guide.take1.EchoClient - response: 296510575</code></pre>
+<p>The implementation works, but suffers from a number of weaknesses ranging from benign to potentially fatal.</p>
+</section>
+<section id="implementation-weaknesses" class="level2" data-number="3.3">
+<h2 data-number="3.3"><span class="header-section-number">3.3</span> Implementation Weaknesses</h2>
+<section id="weak_client_disconnections" class="level3" data-number="3.3.1">
+<h3 data-number="3.3.1"><span class="header-section-number">3.3.1</span> EchoClient Server Disconnections</h3>
+<p>The <code>EchoClient</code> implementation does not handle the case of the server either disconnecting or not existing in the first place. It will simply try to send messages forever and will ignore the fact that it never gets a response. Handling this was deliberately left out of the implementation for the sake of keeping the code as simple as possible. The way to fix this is twofold.</p>
+<p>Firstly, the client can simply give up trying to send the initial <code>HELLO</code> message if no response has been received after a reasonable amount of time has elapsed. This solution can work well for protocols where the first message in the conversation is expected to be sent by the client. Aeron also indicates when a <code>Publication</code> is no longer connected by returning <code>NOT_CONNECTED</code> or <code>CLOSED</code> when calling <code>offer()</code> on the <code>Publication</code>. Real applications can react accordingly rather than just logging a failure message (like the <code>EchoClient</code> and <code>EchoServer</code>) and continuing.</p>
+<p>Secondly, the client can specify <em>image handlers</em> on the <em>subscription</em> it creates in the same manner as the server. When an <em>image</em> becomes available, that means that the server has sent a message and is therefore presumably alive and willing to talk to the client. When an <em>image</em> becomes unavailable, the server is no longer willing or able to talk to the client. This can work well for protocols where the first message in the conversation is expected to be sent by the server.</p>
+</section>
+<section id="weak_mtu" class="level3" data-number="3.3.2">
+<h3 data-number="3.3.2"><span class="header-section-number">3.3.2</span> MTU Handling Is Implicit</h3>
+<p>Sending messages over the open internet imposes an upper bound on the <a href="https://en.wikipedia.org/wiki/Maximum_transmission_unit">MTU</a> that an application can use for individual messages.</p>
+<p>As a general rule of thumb, the <code>MTU</code> for UDP packets sent over the open internet should be <code>&lt;= 1200</code> bytes. Aeron adds the further restriction that <code>MTU</code> values must be a multiple of <code>32</code>.</p>
+<p>The <code>EchoClient</code> and <code>EchoServer</code> implementations use UTF-8 strings that are not expected to be longer than about <code>16</code> bytes, and so assume that fragmentation will never occur and make no attempt to avoid it.</p>
+</section>
+<section id="weak_client_bad_messages" class="level3" data-number="3.3.3">
+<h3 data-number="3.3.3"><span class="header-section-number">3.3.3</span> Clients Sending Bad Messages Are Not Killed</h3>
+<p>The <code>EchoServer</code> implementation has a rather serious failing in that if the first message received by a client is not parseable as a simple <code>HELLO &lt;port&gt;</code> string, the offending client will never be told about this and the server will continue to process every subsequent message from the client as if it was an unparseable <code>HELLO</code> string.</p>
+<p>This is partly a result of an underspecification of the protocol: The server has no way to tell a client that a fatal error has occurred and that the client should go away (or at least retry the <code>HELLO</code> string). This is also an implementation issue: The server has no means to forcibly disconnect a client (and as discussed previouly, the client would not notice that it had been disconnected anyway).</p>
+</section>
+<section id="weak_message_sending_not_robust" class="level3" data-number="3.3.4">
+<h3 data-number="3.3.4"><span class="header-section-number">3.3.4</span> Message Sending Is Not Robust</h3>
+<p>The way that messages are sent is insufficient in the sense that a failure to send a message is not a hard error. Real applications must be prepared to queue and retry messages as necessary, and should raise exceptions if messages absolutely cannot be sent after a reasonable number of attempts.</p>
+<p>See <a href="https://github.com/real-logic/aeron/wiki/Java-Programming-Guide#handling-back-pressure">Handling Back Pressure</a> for details.</p>
+</section>
+<section id="weak_thread" class="level3" data-number="3.3.5">
+<h3 data-number="3.3.5"><span class="header-section-number">3.3.5</span> Work Takes Place On Aeron Threads</h3>
+<p>Currently, all work takes place on threads controlled by Aeron. As per the documentation, <code>Publication</code> values are thread-safe, and <code>Subscription</code> values are not. Real applications should expect to take messages from a <code>Subscription</code> and place them into a queue for processing by one or more application threads <a href="#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a> to avoid blocking the Aeron conductor threads. See <a href="https://github.com/real-logic/aeron/wiki/Thread-Utilisation">Thread Utilisation</a> for details.</p>
+</section>
+<section id="weak_nat" class="level3" data-number="3.3.6">
+<h3 data-number="3.3.6"><span class="header-section-number">3.3.6</span> EchoClient Cannot Be Behind NAT</h3>
+<p>This is the most serious issue with the implementation described so far (and astute programmers familiar with UDP networking will already have noticed): The implementation is fundamentally incompatible with <a href="https://en.wikipedia.org/wiki/Network_address_translation">Network Address Translation</a>.</p>
+<p>The server must be able to open connections directly to clients, and this is something that is not possible without clients enabling port forwarding on the NAT routers that they are inevitably sitting behind. The same is true of connections opened to the server by the clients, but this is less of an issue in that server operators are used to routinely enabling port forwarding on their routers to allow clients to connect in. For a multiplayer game with non-technical players running clients on the open internet, requring each client to enable port forwarding just to be able to connect to a server would be unacceptable.</p>
+<p>Additionally, having clients specify port information in an application-level protocol is distasteful. Anyone familiar with UDP programming can open a socket, bind it, and then read and write datagrams without even thinking about NAT: Routers will statefully match inbound datagrams to previously sent outbound datagrams and allow them to pass through unheeded. It seems unpleasant that Aeron would require us to give up this essentially OS-level functionality. Thankfully, Aeron includes a somewhat sparsely documented feature known as <a href="https://github.com/real-logic/aeron/wiki/Protocol-Specification#multi-destination-cast-mode-of-operation">multi-destination-cast</a> that can be used to traverse NAT systems reliably, removing the requirement for servers to connect directly back to clients.</p>
+</section>
+</section>
+</section>
+<section id="client_server_take_2" class="level1" data-number="4">
+<h1 data-number="4"><span class="header-section-number">4</span> A Client And Server (Take 2)</h1>
+<p>The serious issue that needs to be fixed with our implementation is the lack of ability to function with clients behind NAT. In order to handle this, we need to use a feature of Aeron known as <em>multi-destination-cast</em> (MDC). At first glance, this would appear to have nothing whatsoever to do with NAT: Essentially, it is a means to broadcast messages to a set of clients using only unicast UDP (as opposed to <a href="https://en.wikipedia.org/wiki/Multicast">multicast UDP</a>, which may or may not be available on the open internet). However, as will now be demonstrated, we can actually use MDC to get reliable NAT traversal.</p>
+<section id="multi-destination-cast" class="level2" data-number="4.1">
+<h2 data-number="4.1"><span class="header-section-number">4.1</span> Multi-Destination-Cast</h2>
+<p>To understand how <em>multi-destination-cast</em> solves our problem, consider what happens with a traditional non-Aeron program that uses UDP sockets to send datagrams directly:</p>
+<figure>
+<img src="normal_nat.png" alt="NAT With Datagrams" /><figcaption aria-hidden="true">NAT With Datagrams</figcaption>
+</figure>
+<p>The client machine <code>maize</code> has a private address <code>10.10.1.100</code> and sits behind a stateful packet filter and NAT router <code>tomato</code>. <code>tomato</code> has a private address of <code>10.10.1.1</code> and a public address <code>1.2.3.4</code>. The server <code>apricot</code> has a public address of <code>5.6.7.8</code>. The operating system on <code>tomato</code> is performing unidirectional NAT: The source addresses of packets sent outbound (from left to right on the diagram) from the private network <code>10.10.*</code> will be rewritten so that they appear to be coming from the public address <code>1.2.3.4</code>.</p>
+<ol type="1">
+<li><p><code>maize</code> opens a UDP socket and binds it to <code>10.10.1.100:9000</code>, and then uses the socket to send a datagram <code>p0</code> to port <code>8000</code> on the server <code>apricot</code>.</p></li>
+<li><p>The datagram <code>p0</code> reaches <code>tomato</code>, which dutifully performs network address translation on the packet. The source address of <code>p0</code> is rewritten to the public address of <code>tomato</code> and the source port is changed to an arbitrary high-numbered unused port, resulting in a packet <code>rewrite(p0)</code> with source <code>1.2.3.4:58138</code>. The operating system on <code>tomato</code> records the fact that this rewrite took place, and then sends <code>rewrite(p0)</code> on its way to <code>apricot</code>.</p></li>
+<li><p><code>apricot</code> receives <code>rewrite(p0)</code> and accepts it. A short time later, it sends a response packet <code>p1</code> back to the source of <code>rewrite(p0)</code>.</p></li>
+<li><p>The packet <code>p1</code> reaches <code>tomato</code> and is inspected. The operating system on <code>tomato</code> sees that the packet has come from <code>5.6.7.8:8000</code> and is destined for <code>1.2.3.4:58138</code>, and notices that it recently saw an outgoing packet that was destined for <code>5.6.7.8:8000</code> and that it rewrote the source address to <code>1.2.3.4:58138</code>. It makes the assumption that this must be a packet sent in response to the packet it rewrote earlier, and so it rewrites the destination of <code>p1</code> to be equal to the original source of <code>p0</code> - <code>10.10.1.100:9000</code> - and sends it onward.</p></li>
+<li><p>The rewritten packet, <code>rewrite(p1)</code>, is sent on its way and makes it safely to <code>maize</code>.</p></li>
+</ol>
+<p>UDP is a connectionless protocol, but it’s possible treat a stream of datagrams as a “connection” by keeping track of the source and destination addresses, and by remembering the recent address rewrites. This is standard practice on all modern NAT implementations and means that the vast majority of UDP applications can work correctly when the clients are behind NAT.</p>
+<p>The reason that our original <code>EchoClient</code> and <code>EchoServer</code> implementation cannot work behind NAT is because first the client sends a datagram <code>d0</code> to the server and then, based on the data in the packet, the server then tries to send a new and completely unrelated datagram <code>d1</code> back to the port that the client specified. The NAT router obviously knows nothing of the application-level protocol between the client and server and so it can’t know about the port agreed upon by the client and server. It will not have a record of any recent rewrites that occurred for the port given in <code>d1</code> (because none have occurred), and so the packet will simply be dropped when it reaches the router. As mentioned previously, streams in Aeron are strictly unidirectional and so we cannot construct an an object (like a traditional UDP socket) that has both a single address and port, and that can both receive and send messages.</p>
+<p>Aeron’s <em>multi-destination-cast</em> feature allows subscribers to add themselves as destinations to a <em>publication</em> in a manner that will work correctly when the subscribers are behind NAT. Essentially, a <em>publication</em> can declare an <em>explicit control port</em> that clients may use to register themselves as destinations for the <em>publication</em>. The <em>publication</em> will send data to all of the subscribers that have registered, and the underlying protocol for this is implemented such that the datagrams containing the messages written to the <em>publication</em> will be addressed to the <em>source adresses and ports</em> of the subscribers. This allows the data packets to be treated as ordinary response packets by NAT systems and, as such, they will successfully reach subscribers without issue.</p>
+<p>Briefly, a server at <code>5.6.7.8</code> could make these two calls:</p>
+<pre><code>// aeron:udp?endpoint=5.6.7.8:9000|control=5.6.7.8:9001|control-mode=dynamic|reliable=true
+
+final ConcurrentPublication server_pub =
+  aeron.addPublication(
+    new ChannelUriStringBuilder()
+      .media(&quot;udp&quot;)
+      .reliable(TRUE)
+      .controlEndpoint(&quot;5.6.7.8:9001&quot;)
+      .controlMode(&quot;dynamic&quot;)
+      .endpoint(&quot;5.6.7.8:9000&quot;)
+      .build(),
+    SOME_STREAM_ID);
+
+// aeron:udp?endpoint=5.6.7.8:9000|reliable=true
+
+final Subscription server_sub =
+  aeron.addSubscription(
+    new ChannelUriStringBuilder()
+      .media(&quot;udp&quot;)
+      .reliable(TRUE)
+      .endpoint(&quot;5.6.7.8:9000&quot;)
+      .build(),
+    SOME_STREAM_ID,
+    image -&gt; LOG.debug(&quot;server: a client has connected&quot;),
+    image -&gt; LOG.debug(&quot;server: a client has disconnected&quot;));</code></pre>
+<p>The first call creates a <em>publication</em> that listens for <em>subscriptions</em> on <code>5.6.7.8:9000</code> and also creates a <em>control port</em> on <code>5.6.7.8:9001</code>. It specifies that it wants <em>dynamic</em> MDC, which means that clients will be automatically added to the <em>publication</em> as destinations. In contrast, specifying <em>manual</em> mode here means that clients would need to be explicitly added by calling <code>Publication.addDestination()</code>. The created <em>publication</em> is used to send messages to all clients. Note that we specifically mean <em>all</em> clients; we have no way to address clients individually. This limitation will be addressed shortly.</p>
+<p>The second call creates a <em>subscription</em> on <code>5.6.7.8:9000</code> that will be used to accept messages from clients. Note that although the <em>publication</em> and <em>subscription</em> both share the same <code>5.6.7.8:9000</code> endpoint, they are completely distinct streams: Messages written to <code>server_pub</code> will not be accessible from <code>server_sub</code>.</p>
+<p>In both cases, the server uses an arbitrary application-specific <em>stream ID</em> named <code>SOME_STREAM_ID</code>. The client will need to use the same value.</p>
+<p>Then, a client at <code>10.10.1.100</code> could make the following calls:</p>
+<pre><code>// aeron:udp?endpoint=5.6.7.8:9000|reliable=true
+
+final ConcurrentPublication client_pub =
+  aeron.addPublication(
+    new ChannelUriStringBuilder()
+      .media(&quot;udp&quot;)
+      .reliable(TRUE)
+      .endpoint(&quot;5.6.7.8:9000&quot;)
+      .build(),
+    SOME_STREAM_ID);
+
+// aeron:udp?endpoint=10.10.1.100:8000|control=5.6.7.8:9001|control-mode=dynamic|reliable=true
+
+final Subscription client_sub =
+  aeron.addSubscription(
+    new ChannelUriStringBuilder()
+      .media(&quot;udp&quot;)
+      .reliable(TRUE)
+      .controlEndpoint(&quot;5.6.7.8:9001&quot;)
+      .controlMode(&quot;dynamic&quot;)
+      .endpoint(&quot;10.10.1.100:8000&quot;)
+      .build(),
+    SOME_STREAM_ID,
+    image -&gt; LOG.debug(&quot;client: connected to server&quot;),
+    image -&gt; LOG.debug(&quot;client: disconnected from server&quot;));</code></pre>
+<p>The first call creates a <em>publication</em> that will send messages to the server at <code>5.6.7.8:9000</code>.</p>
+<p>The second call creates a <em>subscription</em> that will create a local socket at <code>10.10.1.100:8000</code> that will be used to receive messages from the server, and will register itself dynamically as a destination by contacting the <em>control socket</em> on the server at <code>5.6.7.8:9001</code>. If no local socket is specified here, the implementation will use an arbitrary high-numbered ephemeral port on whatever local IP address it thinks is appropriate.</p>
+<p>As mentioned, one serious issue with the above is that the server only has a single <em>publication</em> that will send messages to all clients. This is less than useful if the requirement is to implement a protocol like our <code>echo</code> protocol where each client is supposed to have its own stream of messages and responses. The current solution to this in Aeron is to simply create multiple <em>publications</em> and then somehow arrange for each new connecting client to subscribe to a fresh <em>publication</em> intended just for that client. We now need to redesign the <code>echo</code> protocol to address this along with all of the other implementation weaknesses discussed so far.</p>
+</section>
+<section id="threat_model" class="level2" data-number="4.2">
+<h2 data-number="4.2"><span class="header-section-number">4.2</span> Security Requirements</h2>
+<p>We assume a threat model that matches that of the average authoritative server-based (as opposed to <em>peer-to-peer</em>) online multiplayer game as of 2018. That is:</p>
+<ul>
+<li><p>Clients speak directly to the server and never with each other. Messages from anything other than the server’s address must be ignored.</p></li>
+<li><p>Client code is completely untrusted; clients may be running (possibly maliciously) modified code. We must assume that clients will send invalid messages to the server.</p></li>
+<li><p>Clients can spoof packets such that their content can be arbitrary data and may appear to be coming from any address.</p></li>
+<li><p>Clients cannot read packets sent by other clients to the server, and cannot read the packets sent by the server to other clients <a href="#fn6" class="footnote-ref" id="fnref6" role="doc-noteref"><sup>6</sup></a>.</p></li>
+<li><p>Malicious clients can and will try to take control of the server. Failing that, malicious clients can and will try to perform simple denial of service attacks on the server - just because they can.</p></li>
+</ul>
+</section>
+<section id="echo-2.0-outline" class="level2" data-number="4.3">
+<h2 data-number="4.3"><span class="header-section-number">4.3</span> Echo 2.0 Outline</h2>
+<p>The rough outline for our new protocol is that a client will first connect to the server and introduce itself. The server will then allocate a new <em>publication</em> and <em>subscription</em> pair (that we term as a <em>duologue</em>) and tell the client how to reach them. The client will disconnect and then connect to the new <em>duologue</em> and start sending strings to be echoed as before. We’d like to add a way for the server to signal errors to the client and, given that we need to allocate new channels for each new client, we’d be well-advised to place some sort of configurable limit on the number of clients that can be connected at any given time <a href="#fn7" class="footnote-ref" id="fnref7" role="doc-noteref"><sup>7</sup></a>.</p>
+<p>The right way to implement this appears to be to have a client introduce itself to the server on an <em>all clients</em> channel, and then have the server redirect that client to a <em>publication</em>/<em>subscription</em> pair allocated for that client alone. The server broadcasts messages on the <em>all clients</em> channel and prefixes messages addressed to a specific client with the <em>session ID</em> of the target client.</p>
+<p>When a client <code>c</code> subscribes to the <em>all clients</em> channel, it is assigned a (random) <em>session ID</em> <code>s</code> by Aeron automatically. The server allocates a new duologue <code>q</code>, and broadcasts a message that the client with session <code>s</code> should open a <em>publication</em> and <em>subscription</em> to the port number of <code>q</code>. The client then unsubscribes from the <em>all clients</em> channel and opens a <em>publication</em> and <em>subscription</em> to the port number of <code>q</code>. The client and server can then exchange messages on a one-to-one basis via <code>q</code>, with the server deleting <code>q</code> when the client disconnects.</p>
+<p>Of course, a malicious client could simply create lots of <em>subscriptions</em> to the <em>all clients</em> channel and keep requesting new <em>duologues</em> until the server either runs out of available UDP ports or the maximum number of clients for the server is reached. It’s therefore necessary to simply refuse to create more than <code>n</code> new <em>duologues</em> for a client at any given IP address. Of course, this raises a further issue: What if a client <code>c</code> spoofs an endless stream of requests to create new duologues but does so by spoofing the IP address of another client <code>d</code> in the requests? The server will wrongfully punish <code>d</code> for the requests, and will in fact stop <code>d</code> from being able to request its own <em>duologues</em>.</p>
+<p>To combat both of these issues, the server will <em>expire</em> a <em>duologue</em> if no client has connected to it within a configurable time limit. Of course, a malicious client could try to request the maximum number of <em>duologues</em> by spoofing requests and impersonating <code>d</code>, and could then spoof further packets, connect to those <em>duologues</em>, and prevent them from expiring. This would essentially lock <code>d</code> out of the server for as long as the server continues running. This is difficult but not impossible for a determined attacker to achieve. To combat this, the server needs to make it difficult for anyone other than a well-behaved client to actually connect to a requested <em>duologue</em>. Essentially, the server must share a secret with a requesting client, and that client must then present that same secret to the server when connecting to the <em>duologue</em>.</p>
+<p>The solution to this is fairly simple. The client sends a 4-byte <a href="https://en.wikipedia.org/wiki/One-time_pad">one-time pad</a> to the server when it connects to the <em>all clients</em> channel. By our intended <a href="#threat-model">threat model</a>, only the server is capable of reading this one-time pad. When the server creates a new <em>duologue</em>, it chooses the <em>session ID</em> for the <em>duologue</em> ahead of time (rather than allowing Aeron to pick one itself), encrypts this <em>session ID</em> with the client’s one-time pad, and sends the encrypted ID as part of the response given to the client when directing it to the new <em>duologue</em>. The client decrypts the <em>session ID</em> and then uses it when connecting to the <em>duologue</em>. Aeron will automatically reject <a href="#fn8" class="footnote-ref" id="fnref8" role="doc-noteref"><sup>8</sup></a> any client that tries to connect with an incorrect <em>session ID</em>; it’s not necessary to deal with invalid sessions at the application level.</p>
+<p>In effect, this means that a malicious client that is trying to interfere with the ability of another client to connect must:</p>
+<ol type="1">
+<li><p>Listen for messages in the <em>all clients</em> channel indicating that the server has just created a new <em>duologue</em>.</p></li>
+<li><p>Somehow guess the source IP address of the client that created the <em>duologue</em>. In the case of IPv4, this would involve guessing the right address from slightly more than <code>2 ^ 31</code> addresses.</p></li>
+<li><p>Somehow guess the required <em>session ID</em>. Identifiers are randomly selected from a pool of <code>2 ^ 31</code> possible values.</p></li>
+<li><p>Spoof enough packets implementing the underlying Aeron protocol to set up the required publication to the <em>duologue</em>, including the hard-to-guess <em>session ID</em>, and then spoof more packets to keep the connection alive.</p></li>
+</ol>
+<p>This would appear to be next to impossible to achieve reliably. It would be easier for the attacker to simply attempt some sort of distributed denial-of-service attack (against which there is obviously no protocol-level protection possible).</p>
+</section>
+<section id="echo-2.0-specification" class="level2" data-number="4.4">
+<h2 data-number="4.4"><span class="header-section-number">4.4</span> Echo 2.0 Specification</h2>
+<p>All messages are UTF-8 encoded strings.</p>
+<p>The client:</p>
+<ol type="1">
+<li><p>Must open a <em>publication</em> <code>p</code> and a <em>subscription</em> <code>s</code> to the server, using dynamic MDC on the <em>subscription</em>, and must send the string <code>HELLO &lt;key&gt;</code> where <code>&lt;key&gt;</code> is a random unsigned 32-bit hexadecimal value <a href="#fn9" class="footnote-ref" id="fnref9" role="doc-noteref"><sup>9</sup></a> encoded as a string.</p></li>
+<li><p>Must wait until the server sends a <em>response string</em> of either the form <code>&lt;session&gt; CONNECT &lt;port&gt; &lt;control-port&gt; &lt;encrypted-session&gt;</code> or <code>&lt;session&gt; ERROR &lt;message&gt;</code>.</p></li>
+</ol>
+<ul>
+<li>If the response is of the form <code>&lt;session&gt; ERROR ...</code>, but <code>&lt;session&gt;</code> does not match the client’s current <em>session ID</em>, the response should be ignored and the client should continue waiting.</li>
+<li>If the response is of the form <code>&lt;session&gt; ERROR &lt;message&gt;</code> and <code>&lt;session&gt;</code> matches the the client’s current <em>session ID</em>, the client must assume that <code>&lt;message&gt;</code> is an informative error message, log the message, and exit.</li>
+<li>If the response is of the form <code>&lt;session&gt; CONNECT ...</code>, but <code>&lt;session&gt;</code> does not match the client’s current <em>session ID</em>, the response should be ignored and the client should continue waiting.</li>
+<li>If the response is of the form <code>&lt;session&gt; CONNECT &lt;port&gt; &lt;control-port&gt; &lt;encrypted-session&gt;</code> and <code>&lt;session&gt;</code> matches the client’s current <em>session ID</em>:
+<ul>
+<li>The client must decrypt <code>&lt;encrypted-session&gt;</code> by evaluating <code>k = &lt;encrypted-session&gt; ^ &lt;key&gt;</code>, where <code>&lt;key&gt;</code> is the value from step 1.</li>
+<li>The client must create a <em>subscription</em> <code>t</code> to port <code>&lt;port&gt;</code> on the server, using <code>&lt;control-port&gt;</code> for MDC and with an explicit <em>session ID</em> <code>k</code>.</li>
+<li>The client must create a <em>publication</em> <code>u</code> to port <code>&lt;port&gt;</code> on the server with an explicit <em>session ID</em> <code>k</code>.</li>
+<li>The client must close <code>s</code> and <code>p</code>, and progress to step 3.</li>
+</ul></li>
+<li>If the server fails to return an acceptable response in a reasonable amount of time, the client must log an error message and exit.</li>
+</ul>
+<ol start="3" type="1">
+<li>Must send messages of the form <code>ECHO &lt;message&gt;</code> to <code>u</code>, listening for responses on <code>t</code>.</li>
+</ol>
+<ul>
+<li>If the response is of the form <code>ERROR &lt;message&gt;</code>, the client should assume that <code>&lt;message&gt;</code> is an informative error message, log the message, and exit.</li>
+<li>If the response is of the form <code>ECHO &lt;message&gt;</code>, the client should assume that <code>&lt;message&gt;</code> is one of the strings it previously sent, and return to step 3.</li>
+</ul>
+<p>The server:</p>
+<ol type="1">
+<li><p>Must open a <em>publication</em> <code>p</code> that will be used to send initial messages to clients when they connect. It must provide a <em>control port</em> so that clients can use dynamic MDC.</p></li>
+<li><p>Must create a <em>subscription</em> <code>s</code> that will be used to receive initial messages from clients.</p></li>
+</ol>
+<p>The server stores an initially empty list of <em>duologues</em>. A <em>duologue</em> is a structure comprising the following state:</p>
+<pre><code>record Duologue(
+  InetAddress owner,
+  int session_id,
+  Publication pub,
+  Subscription sub);</code></pre>
+<p>When a message is received on <code>s</code>:</p>
+<ul>
+<li>If the message is of the form <code>HELLO &lt;key&gt;</code>
+<ul>
+<li>If the size of the list of <em>duologues</em> is <code>n</code>:
+<ul>
+<li>The server must write a message of the form <code>&lt;session-id&gt; ERROR server full</code> to <code>p</code>, where <code>&lt;session-id&gt;</code> is the <em>session ID</em> of the client that sent the message, and return to waiting for messages.</li>
+</ul></li>
+<li>If there are at least <code>m</code> existing <em>duologues</em> owned by the IP address of the client that sent the message, where <code>m</code> is a configurable value:
+<ul>
+<li>The server must write a message of the form <code>&lt;session-id&gt; ERROR too many connections for IP address</code> to <code>p</code>, where <code>&lt;session-id&gt;</code> is the <em>session ID</em> of the client that sent the message, and return to waiting for messages.</li>
+</ul></li>
+<li>Otherwise:
+<ul>
+<li>The server must record <code>(a, z, t, u)</code> into the list of <em>duologues</em>, where <code>t</code> and <code>u</code> are a freshly allocated <em>publication</em> and <em>subscription</em>, respectively, <code>a</code> is the IP address of the client, and <code>z</code> is a freshly allocated <em>session ID</em>.</li>
+<li>The server must write a message <code>&lt;session-id&gt; CONNECT &lt;port&gt; &lt;control-port&gt; &lt;encrypted-session&gt;</code> to <code>p</code>, where <code>&lt;port&gt;</code> and <code>&lt;control-port&gt;</code> are the port numbers of <code>t</code> and <code>u</code>, <code>&lt;encrypted-session&gt;</code> is <code>z ^ &lt;key&gt;</code>, and <code>&lt;session-id&gt;</code> is the <em>session ID</em> of the client that sent the message.</li>
+<li>The server must return to waiting for messages.</li>
+</ul></li>
+</ul></li>
+</ul>
+<p>When message is received on the subscription <code>u</code> of a <em>duologue</em> <code>i</code>:</p>
+<ul>
+<li>If the message is of the form <code>ECHO &lt;message&gt;</code>
+<ul>
+<li>The server must write a message of the form <code>ECHO &lt;message&gt;</code> to <code>t</code>.</li>
+</ul></li>
+<li>Otherwise:
+<ul>
+<li>The server must write a message of the form <code>ERROR bad message</code> to <code>t</code>.</li>
+<li>The server must close <code>t</code> and <code>u</code>.</li>
+<li>The server must delete the duologue.</li>
+</ul></li>
+</ul>
+<p>Finally, the server should delete <em>duologues</em> that have no subscribers after the arbitrary configurable time limit has expired.</p>
+</section>
+<section id="echo-2.0-server" class="level2" data-number="4.5">
+<h2 data-number="4.5"><span class="header-section-number">4.5</span> Echo 2.0 Server</h2>
+<p>We start by examining the server implementation.</p>
+<p>The <code>create</code> method is mostly unchanged. The main difference is that we tell the <em>media driver</em> that we are going to be manually assigning <em>session IDs</em> in the range <code>[EchoSessions.RESERVED_SESSION_ID_LOW, EchoSessions.RESERVED_SESSION_ID_HIGH]</code> ourselves. When the <em>media driver</em> automatically assigns <em>session IDs</em>, it must use values outside of this range to avoid conflict with any that we assign ourselves. We also initialize a value of type <code>EchoServerExecutorService</code>.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L94">EchoServer.create()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_create.txt"><code>  public static EchoServer create(
+    final Clock clock,
+    final EchoServerConfiguration configuration)
+    throws EchoServerException
+  {
+    Objects.requireNonNull(clock, &quot;clock&quot;);
+    Objects.requireNonNull(configuration, &quot;configuration&quot;);
+
+    final String directory =
+      configuration.baseDirectory().toAbsolutePath().toString();
+
+    final MediaDriver.Context media_context =
+      new MediaDriver.Context()
+        .dirDeleteOnStart(true)
+        .publicationReservedSessionIdLow(EchoSessions.RESERVED_SESSION_ID_LOW)
+        .publicationReservedSessionIdHigh(EchoSessions.RESERVED_SESSION_ID_HIGH)
+        .aeronDirectoryName(directory);
+
+    final Aeron.Context aeron_context =
+      new Aeron.Context()
+        .aeronDirectoryName(directory);
+
+    EchoServerExecutorService exec = null;
+    try {
+      exec = EchoServerExecutor.create();
+
+      MediaDriver media_driver = null;
+      try {
+        media_driver = MediaDriver.launch(media_context);
+
+        Aeron aeron = null;
+        try {
+          aeron = Aeron.connect(aeron_context);
+        } catch (final Exception e) {
+          closeIfNotNull(aeron);
+          throw e;
+        }
+
+        return new EchoServer(clock, exec, media_driver, aeron, configuration);
+      } catch (final Exception e) {
+        closeIfNotNull(media_driver);
+        throw e;
+      }
+    } catch (final Exception e) {
+      try {
+        closeIfNotNull(exec);
+      } catch (final Exception c_ex) {
+        e.addSuppressed(c_ex);
+      }
+      throw new EchoServerCreationException(e);
+    }
+  }
+</code></pre>
+<p>As can be seen, the multiple parameters that were passed to the <code>create()</code> method in the original implementation have been moved into an immutable <code>EchoServerConfiguration</code> type. The implementation of this type is generated automatically by the <a href="http://www.immutables.org">immutables.org</a> annotation processor.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerConfiguration.java#L9">EchoServerConfiguration</a></p>
+<pre data-include="out/aeron-guide/echo_server2_EchoServerConfiguration.txt"><code>public interface EchoServerConfiguration
+{
+  /**
+   * @return The base directory that will be used for the server; should be unique for each server instance
+   */
+
+  @Value.Parameter
+  Path baseDirectory();
+
+  /**
+   * @return The local address to which the server will bind
+   */
+
+  @Value.Parameter
+  InetAddress localAddress();
+
+  /**
+   * @return The port that the server will use for client introductions
+   */
+
+  @Value.Parameter
+  int localInitialPort();
+
+  /**
+   * @return The dynamic MDC control port that the server will use for client introductions
+   */
+
+  @Value.Parameter
+  int localInitialControlPort();
+
+  /**
+   * @return The base port that will be used for individual client duologues
+   */
+
+  @Value.Parameter
+  int localClientsBasePort();
+
+  /**
+   * @return The maximum number of clients that will be allowed on the server
+   */
+
+  @Value.Parameter
+  int clientMaximumCount();
+
+  /**
+   * @return The maximum number of duologues that will be allowed per remote client IP address
+   */
+
+  @Value.Parameter
+  int maximumConnectionsPerAddress();
+}
+</code></pre>
+<p>The <code>EchoServerExecutorService</code> type is effectively a single-threaded <code>java.util.concurrent.Executor</code> with some extra methods added that code can use to check that it is indeed running on the correct thread. The class is used to ensure that long-running work is not performed on threads owned by Aeron (addressing <a href="#weak_thread">the noted threading issues</a>), and to ensure that access to the server’s internal state is strictly single-threaded. The implementation of this class is fairly unsurprising:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerExecutorService.java#L10">EchoServerExecutorService</a></p>
+<pre data-include="out/aeron-guide/echo_server2_executor_service.txt"><code>public interface EchoServerExecutorService extends AutoCloseable, Executor
+{
+  /**
+   * @return {@code true} if the caller of this method is running on the executor thread
+   */
+
+  boolean isExecutorThread();
+
+  /**
+   * Raise {@link IllegalStateException} iff {@link #isExecutorThread()} would
+   * currently return {@code false}.
+   */
+
+  default void assertIsExecutorThread()
+  {
+    if (!this.isExecutorThread()) {
+      throw new IllegalStateException(
+        &quot;The current thread is not a server executor thread&quot;);
+    }
+  }
+}
+</code></pre>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerExecutor.java#L15">EchoServerExecutor</a></p>
+<pre data-include="out/aeron-guide/echo_server2_executor.txt"><code>public final class EchoServerExecutor implements EchoServerExecutorService
+{
+  private static final Logger LOG =
+    LoggerFactory.getLogger(EchoServerExecutor.class);
+
+  private final ExecutorService executor;
+
+  private EchoServerExecutor(
+    final ExecutorService in_exec)
+  {
+    this.executor = Objects.requireNonNull(in_exec, &quot;exec&quot;);
+  }
+
+  @Override
+  public boolean isExecutorThread()
+  {
+    return Thread.currentThread() instanceof EchoServerThread;
+  }
+
+  @Override
+  public void execute(final Runnable runnable)
+  {
+    Objects.requireNonNull(runnable, &quot;runnable&quot;);
+
+    this.executor.submit(() -&gt; {
+      try {
+        runnable.run();
+      } catch (final Throwable e) {
+        LOG.error(&quot;uncaught exception: &quot;, e);
+      }
+    });
+  }
+
+  @Override
+  public void close()
+  {
+    this.executor.shutdown();
+  }
+
+  private static final class EchoServerThread extends Thread
+  {
+    EchoServerThread(final Runnable target)
+    {
+      super(Objects.requireNonNull(target, &quot;target&quot;));
+    }
+  }
+
+  /**
+   * @return A new executor
+   */
+
+  public static EchoServerExecutor create()
+  {
+    final ThreadFactory factory = r -&gt; {
+      final EchoServerThread t = new EchoServerThread(r);
+      t.setName(new StringBuilder(64)
+                  .append(&quot;com.io7m.aeron_guide.take2.server[&quot;)
+                  .append(Long.toUnsignedString(t.getId()))
+                  .append(&quot;]&quot;)
+                  .toString());
+      return t;
+    };
+
+    return new EchoServerExecutor(Executors.newSingleThreadExecutor(factory));
+  }
+}
+</code></pre>
+<p>We litter the code with calls to <code>assertIsExecutorThread()</code> to help catch thread misuse early.</p>
+<p>The majority of the interesting work that the server does is now performed by a static inner class called <code>ClientState</code>. This class is responsible for accepting requests from clients, checking access restrictions (such as enforcing the limit on <em>duologues</em> by a single IP address), polling existing <em>duologues</em> for activity, and so on. We establish a rule that access to the <code>ClientState</code> class is confined to a single thread via the <code>EchoServerExecutor</code> type. The <code>EchoServer</code> class defines three methods that each essentially delegate to the <code>ClientState</code> class:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L316">EchoServer.onInitialClientConnected()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_on_initial_client_connected.txt"><code>  private void onInitialClientConnected(
+    final Image image)
+  {
+    this.executor.execute(() -&gt; {
+      LOG.debug(
+        &quot;[{}] initial client connected ({})&quot;,
+        Integer.toString(image.sessionId()),
+        image.sourceIdentity());
+
+      this.clients.onInitialClientConnected(
+        image.sessionId(),
+        EchoAddresses.extractAddress(image.sourceIdentity()));
+    });
+  }
+</code></pre>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L331">EchoServer.onInitialClientDisconnected()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_on_initial_client_disconnected.txt"><code>  private void onInitialClientDisconnected(
+    final Image image)
+  {
+    this.executor.execute(() -&gt; {
+      LOG.debug(
+        &quot;[{}] initial client disconnected ({})&quot;,
+        Integer.toString(image.sessionId()),
+        image.sourceIdentity());
+
+      this.clients.onInitialClientDisconnected(image.sessionId());
+    });
+  }
+</code></pre>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L260">EchoServer.onInitialClientMessage()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_on_initial_client_message.txt"><code>  private void onInitialClientMessage(
+    final Publication publication,
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+  {
+    final String message =
+      EchoMessages.parseMessageUTF8(buffer, offset, length);
+
+    final String session_name =
+      Integer.toString(header.sessionId());
+    final Integer session_boxed =
+      Integer.valueOf(header.sessionId());
+
+    this.executor.execute(() -&gt; {
+      try {
+        this.clients.onInitialClientMessageProcess(
+          publication,
+          session_name,
+          session_boxed,
+          message);
+      } catch (final Exception e) {
+        LOG.error(&quot;could not process client message: &quot;, e);
+      }
+    });
+  }
+</code></pre>
+<p>The <code>onInitialClientConnected()</code> and <code>onInitialClientDisconnected()</code> methods are called as <em>image handlers</em> by the <em>subscription</em> the server configures for the <em>all clients</em> channel. The <code>onInitialClientMessage</code> method is called when a client sends a message on the <em>all clients</em> channel.</p>
+<p>The <code>ClientState.onInitialClientConnectedProcess()</code> method does the majority of the work required when a client requests the creation of a new <em>duologue</em>:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L400">EchoServer.ClientState.onInitialClientConnectedProcess()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_on_initial_client_message_process.txt"><code>    void onInitialClientMessageProcess(
+      final Publication publication,
+      final String session_name,
+      final Integer session_boxed,
+      final String message)
+      throws EchoServerException, IOException
+    {
+      this.exec.assertIsExecutorThread();
+
+      LOG.debug(&quot;[{}] received: {}&quot;, session_name, message);
+
+      /*
+       * The HELLO command is the only acceptable message from clients
+       * on the all-clients channel.
+       */
+
+      final Matcher hello_matcher = PATTERN_HELLO.matcher(message);
+      if (!hello_matcher.matches()) {
+        EchoMessages.sendMessage(
+          publication,
+          this.send_buffer,
+          errorMessage(session_name, &quot;bad message&quot;));
+        return;
+      }
+
+      /*
+       * Check to see if there are already too many clients connected.
+       */
+
+      if (this.client_duologues.size() &gt;= this.configuration.clientMaximumCount()) {
+        LOG.debug(&quot;server is full&quot;);
+        EchoMessages.sendMessage(
+          publication,
+          this.send_buffer,
+          errorMessage(session_name, &quot;server full&quot;));
+        return;
+      }
+
+      /*
+       * Check to see if this IP address already has the maximum number of
+       * duologues allocated to it.
+       */
+
+      final InetAddress owner =
+        this.client_session_addresses.get(session_boxed);
+
+      if (this.address_counter.countFor(owner) &gt;=
+        this.configuration.maximumConnectionsPerAddress()) {
+        LOG.debug(&quot;too many connections for IP address&quot;);
+        EchoMessages.sendMessage(
+          publication,
+          this.send_buffer,
+          errorMessage(session_name, &quot;too many connections for IP address&quot;));
+        return;
+      }
+
+      /*
+       * Parse the one-time pad with which the client wants the server to
+       * encrypt the identifier of the session that will be created.
+       */
+
+      final int duologue_key =
+        Integer.parseUnsignedInt(hello_matcher.group(1), 16);
+
+      /*
+       * Allocate a new duologue, encrypt the resulting session ID, and send
+       * a message to the client telling it where to find the new duologue.
+       */
+
+      final EchoServerDuologue duologue =
+        this.allocateNewDuologue(session_name, session_boxed, owner);
+
+      final String session_crypt =
+        Integer.toUnsignedString(duologue_key ^ duologue.session(), 16)
+          .toUpperCase();
+
+      EchoMessages.sendMessage(
+        publication,
+        this.send_buffer,
+        connectMessage(
+          session_name,
+          duologue.portData(),
+          duologue.portControl(),
+          session_crypt));
+    }
+</code></pre>
+<p>The <code>ClientState.allocateNewDuologue()</code> method does the actual work of <em>duologue</em> allocation by allocating UDP port numbers, a <em>session ID</em>, incrementing the number of <em>duologues</em> assigned to the IP address of the client, and then calling <code>EchoServerDuologue.create()</code> (which does the actual work of creating the underlying Aeron <em>publications</em> and <em>subscriptions</em>:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L486">EchoServer.ClientState.allocateNewDuologue()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_allocateNewDuologue.txt"><code>    private EchoServerDuologue allocateNewDuologue(
+      final String session_name,
+      final Integer session_boxed,
+      final InetAddress owner)
+      throws
+      EchoServerPortAllocationException,
+      EchoServerSessionAllocationException
+    {
+      this.address_counter.increment(owner);
+
+      final EchoServerDuologue duologue;
+      try {
+        final int[] ports = this.port_allocator.allocate(2);
+        try {
+          final int session = this.session_allocator.allocate();
+          try {
+            duologue =
+              EchoServerDuologue.create(
+                this.aeron,
+                this.clock,
+                this.exec,
+                this.configuration.localAddress(),
+                owner,
+                session,
+                ports[0],
+                ports[1]);
+            LOG.debug(&quot;[{}] created new duologue&quot;, session_name);
+            this.client_duologues.put(session_boxed, duologue);
+          } catch (final Exception e) {
+            this.session_allocator.free(session);
+            throw e;
+          }
+        } catch (final EchoServerSessionAllocationException e) {
+          this.port_allocator.free(ports[0]);
+          this.port_allocator.free(ports[1]);
+          throw e;
+        }
+      } catch (final EchoServerPortAllocationException e) {
+        this.address_counter.decrement(owner);
+        throw e;
+      }
+      return duologue;
+    }
+</code></pre>
+<p>The <code>ClientState.onInitialClientConnected()</code> and <code>ClientState.onInitialClientDisconnected()</code> methods merely record the IP address associated with each <em>session ID</em> for later use in the <code>ClientState.onInitialClientConnectedProcess()</code> method:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L538">EchoServer.ClientState.onInitialClientConnected()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_onInitialClientConnected.txt"><code>    void onInitialClientConnected(
+      final int session_id,
+      final InetAddress client_address)
+    {
+      this.exec.assertIsExecutorThread();
+
+      this.client_session_addresses.put(
+        Integer.valueOf(session_id), client_address);
+    }
+</code></pre>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L530">EchoServer.ClientState.onInitialClientDisconnected()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_onInitialClientDisconnected.txt"><code>    void onInitialClientDisconnected(
+      final int session_id)
+    {
+      this.exec.assertIsExecutorThread();
+
+      this.client_session_addresses.remove(Integer.valueOf(session_id));
+    }
+</code></pre>
+<p>The allocation of UDP port numbers for new <em>duologues</em> is handled by the <code>EchoServerPortAllocator</code> class. This is a simple class that will randomly allocate integer values from a configurable range and will not re-use integer values until they have been explicitly freed. In our implementation, we require 2 UDP ports for every client, have a configurable limit of <code>c</code> clients, and have a configurable base port <code>p</code>. We therefore set the range of ports to <code>[p, p + (2 * c))</code>.</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerPortAllocator.java#L17">EchoServerPortAllocator</a></p>
+<pre data-include="out/aeron-guide/echo_server2_EchoServerPortAllocator.txt"><code>public final class EchoServerPortAllocator
+{
+  private final int port_lo;
+  private final int port_hi;
+  private final IntHashSet ports_used;
+  private final IntArrayList ports_free;
+
+  /**
+   * Create a new port allocator.
+   *
+   * @param port_base The base port
+   * @param max_ports The maximum number of ports that will be allocated
+   *
+   * @return A new port allocator
+   */
+
+  public static EchoServerPortAllocator create(
+    final int port_base,
+    final int max_ports)
+  {
+    return new EchoServerPortAllocator(port_base, max_ports);
+  }
+
+  private EchoServerPortAllocator(
+    final int in_port_lo,
+    final int in_max_ports)
+  {
+    if (in_port_lo &lt;= 0 || in_port_lo &gt;= 65536) {
+      throw new IllegalArgumentException(
+        String.format(
+          &quot;Base port %d must be in the range [1, 65535]&quot;,
+          Integer.valueOf(in_port_lo)));
+    }
+
+    this.port_lo = in_port_lo;
+    this.port_hi = in_port_lo + (in_max_ports - 1);
+
+    if (this.port_hi &lt; 0 || this.port_hi &gt;= 65536) {
+      throw new IllegalArgumentException(
+        String.format(
+          &quot;Uppermost port %d must be in the range [1, 65535]&quot;,
+          Integer.valueOf(this.port_hi)));
+    }
+
+    this.ports_used = new IntHashSet(in_max_ports);
+    this.ports_free = new IntArrayList();
+
+    for (int port = in_port_lo; port &lt;= this.port_hi; ++port) {
+      this.ports_free.addInt(port);
+    }
+    Collections.shuffle(this.ports_free);
+  }
+
+  /**
+   * Free a given port. Has no effect if the given port is outside of the range
+   * considered by the allocator.
+   *
+   * @param port The port
+   */
+
+  public void free(
+    final int port)
+  {
+    if (port &gt;= this.port_lo &amp;&amp; port &lt;= this.port_hi) {
+      this.ports_used.remove(port);
+      this.ports_free.addInt(port);
+    }
+  }
+
+  /**
+   * Allocate {@code count} ports.
+   *
+   * @param count The number of ports that will be allocated
+   *
+   * @return An array of allocated ports
+   *
+   * @throws EchoServerPortAllocationException If there are fewer than {@code count} ports available to allocate
+   */
+
+  public int[] allocate(
+    final int count)
+    throws EchoServerPortAllocationException
+  {
+    if (this.ports_free.size() &lt; count) {
+      throw new EchoServerPortAllocationException(
+        String.format(
+          &quot;Too few ports available to allocate %d ports&quot;,
+          Integer.valueOf(count)));
+    }
+
+    final int[] result = new int[count];
+    for (int index = 0; index &lt; count; ++index) {
+      result[index] = this.ports_free.remove(0).intValue();
+      this.ports_used.add(result[index]);
+    }
+
+    return result;
+  }
+}
+</code></pre>
+<p>Similarly, the allocation of <em>session IDs</em> for new <em>duologues</em> is handled by the <code>EchoServerSessionAllocator</code> class <a href="#fn10" class="footnote-ref" id="fnref10" role="doc-noteref"><sup>10</sup></a>:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerSessionAllocator.java#L23">EchoServerSessionAllocator</a></p>
+<pre data-include="out/aeron-guide/echo_server2_EchoServerSessionAllocator.txt"><code>public final class EchoServerSessionAllocator
+{
+  private final IntHashSet used;
+  private final SecureRandom random;
+  private final int min;
+  private final int max_count;
+
+  private EchoServerSessionAllocator(
+    final int in_min,
+    final int in_max,
+    final SecureRandom in_random)
+  {
+    if (in_max &lt; in_min) {
+      throw new IllegalArgumentException(
+        String.format(
+          &quot;Maximum value %d must be &gt;= minimum value %d&quot;,
+          Integer.valueOf(in_max),
+          Integer.valueOf(in_min)));
+    }
+
+    this.used = new IntHashSet();
+    this.min = in_min;
+    this.max_count = Math.max(in_max - in_min, 1);
+    this.random = Objects.requireNonNull(in_random, &quot;random&quot;);
+  }
+
+  /**
+   * Create a new session allocator.
+   *
+   * @param in_min    The minimum session ID (inclusive)
+   * @param in_max    The maximum session ID (exclusive)
+   * @param in_random A random number generator
+   *
+   * @return A new allocator
+   */
+
+  public static EchoServerSessionAllocator create(
+    final int in_min,
+    final int in_max,
+    final SecureRandom in_random)
+  {
+    return new EchoServerSessionAllocator(in_min, in_max, in_random);
+  }
+
+  /**
+   * Allocate a new session.
+   *
+   * @return A new session ID
+   *
+   * @throws EchoServerSessionAllocationException If there are no non-allocated sessions left
+   */
+
+  public int allocate()
+    throws EchoServerSessionAllocationException
+  {
+    if (this.used.size() == this.max_count) {
+      throw new EchoServerSessionAllocationException(
+        &quot;No session IDs left to allocate&quot;);
+    }
+
+    for (int index = 0; index &lt; this.max_count; ++index) {
+      final int session = this.random.nextInt(this.max_count) + this.min;
+      if (!this.used.contains(session)) {
+        this.used.add(session);
+        return session;
+      }
+    }
+
+    throw new EchoServerSessionAllocationException(
+      String.format(
+        &quot;Unable to allocate a session ID after %d attempts (%d values in use)&quot;,
+        Integer.valueOf(this.max_count),
+        Integer.valueOf(this.used.size()),
+        Integer.valueOf(this.max_count)));
+  }
+
+  /**
+   * Free a session. After this method returns, {@code session} becomes eligible
+   * for allocation by future calls to {@link #allocate()}.
+   *
+   * @param session The session to free
+   */
+
+  public void free(final int session)
+  {
+    this.used.remove(session);
+  }
+}
+</code></pre>
+<p>The <code>ClientState</code> class is responsible for polling all of the current <em>duologues</em> in order to allow them to process pending messages, and is also responsible for deleting expired <em>duologues</em>:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L548">EchoServer.ClientState.poll()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_poll.txt"><code>    public void poll()
+    {
+      this.exec.assertIsExecutorThread();
+
+      final Iterator&lt;Map.Entry&lt;Integer, EchoServerDuologue&gt;&gt; iter =
+        this.client_duologues.entrySet().iterator();
+
+      /*
+       * Get the current time; used to expire duologues.
+       */
+
+      final Instant now = this.clock.instant();
+
+      while (iter.hasNext()) {
+        final Map.Entry&lt;Integer, EchoServerDuologue&gt; entry = iter.next();
+        final EchoServerDuologue duologue = entry.getValue();
+
+        final String session_name =
+          Integer.toString(entry.getKey().intValue());
+
+        /*
+         * If the duologue has either been closed, or has expired, it needs
+         * to be deleted.
+         */
+
+        boolean delete = false;
+        if (duologue.isExpired(now)) {
+          LOG.debug(&quot;[{}] duologue expired&quot;, session_name);
+          delete = true;
+        }
+
+        if (duologue.isClosed()) {
+          LOG.debug(&quot;[{}] duologue closed&quot;, session_name);
+          delete = true;
+        }
+
+        if (delete) {
+          try {
+            duologue.close();
+          } finally {
+            LOG.debug(&quot;[{}] deleted duologue&quot;, session_name);
+            iter.remove();
+            this.port_allocator.free(duologue.portData());
+            this.port_allocator.free(duologue.portControl());
+            this.address_counter.decrement(duologue.ownerAddress());
+          }
+          continue;
+        }
+
+        /*
+         * Otherwise, poll the duologue for activity.
+         */
+
+        duologue.poll();
+      }
+    }
+</code></pre>
+<p>Finally, the actual per-<em>duologue</em> state and behaviour is encapsulated by the <code>EchoServerDuologue</code> class:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServerDuologue.java#L29">EchoServerDuologue</a></p>
+<pre data-include="out/aeron-guide/echo_server2_EchoServerDuologue.txt"><code>public final class EchoServerDuologue implements AutoCloseable
+{
+  private static final Logger LOG =
+    LoggerFactory.getLogger(EchoServerDuologue.class);
+
+  private static final Pattern PATTERN_ECHO =
+    Pattern.compile(&quot;^ECHO (.*)$&quot;);
+
+  private final UnsafeBuffer send_buffer;
+  private final EchoServerExecutorService exec;
+  private final Instant initial_expire;
+  private final InetAddress owner;
+  private final int port_data;
+  private final int port_control;
+  private final int session;
+  private final FragmentAssembler handler;
+  private boolean closed;
+  private Publication publication;
+  private Subscription subscription;
+
+  private EchoServerDuologue(
+    final EchoServerExecutorService in_exec,
+    final Instant in_initial_expire,
+    final InetAddress in_owner_address,
+    final int in_session,
+    final int in_port_data,
+    final int in_port_control)
+  {
+    this.exec =
+      Objects.requireNonNull(in_exec, &quot;executor&quot;);
+    this.initial_expire =
+      Objects.requireNonNull(in_initial_expire, &quot;initial_expire&quot;);
+    this.owner =
+      Objects.requireNonNull(in_owner_address, &quot;owner&quot;);
+
+    this.send_buffer =
+      new UnsafeBuffer(BufferUtil.allocateDirectAligned(1024, 16));
+
+    this.session = in_session;
+    this.port_data = in_port_data;
+    this.port_control = in_port_control;
+    this.closed = false;
+
+    this.handler = new FragmentAssembler((data, offset, length, header) -&gt; {
+      try {
+        this.onMessageReceived(data, offset, length, header);
+      } catch (final IOException e) {
+        LOG.error(&quot;failed to send message: &quot;, e);
+        this.close();
+      }
+    });
+  }
+
+  /**
+   * Create a new duologue. This will create a new publication and subscription
+   * pair using a specific session ID and intended only for a single client
+   * at a given address.
+   *
+   * @param aeron         The Aeron instance
+   * @param clock         A clock used for time-related operations
+   * @param exec          An executor
+   * @param local_address The local address of the server ports
+   * @param owner_address The address of the client
+   * @param session       The session ID
+   * @param port_data     The data port
+   * @param port_control  The control port
+   *
+   * @return A new duologue
+   */
+
+  public static EchoServerDuologue create(
+    final Aeron aeron,
+    final Clock clock,
+    final EchoServerExecutorService exec,
+    final InetAddress local_address,
+    final InetAddress owner_address,
+    final int session,
+    final int port_data,
+    final int port_control)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(clock, &quot;clock&quot;);
+    Objects.requireNonNull(exec, &quot;exec&quot;);
+    Objects.requireNonNull(local_address, &quot;local_address&quot;);
+    Objects.requireNonNull(owner_address, &quot;owner_address&quot;);
+
+    LOG.debug(
+      &quot;creating new duologue at {} ({},{}) session {} for {}&quot;,
+      local_address,
+      Integer.valueOf(port_data),
+      Integer.valueOf(port_control),
+      Integer.toString(session),
+      owner_address);
+
+    final Instant initial_expire =
+      clock.instant().plus(10L, ChronoUnit.SECONDS);
+
+    final ConcurrentPublication pub =
+      EchoChannels.createPublicationDynamicMDCWithSession(
+        aeron,
+        local_address,
+        port_control,
+        EchoServer.ECHO_STREAM_ID,
+        session);
+
+    try {
+      final EchoServerDuologue duologue =
+        new EchoServerDuologue(
+          exec,
+          initial_expire,
+          owner_address,
+          session,
+          port_data,
+          port_control);
+
+      final Subscription sub =
+        EchoChannels.createSubscriptionWithHandlersAndSession(
+          aeron,
+          local_address,
+          port_data,
+          EchoServer.ECHO_STREAM_ID,
+          duologue::onClientConnected,
+          duologue::onClientDisconnected,
+          session);
+
+      duologue.setPublicationSubscription(pub, sub);
+      return duologue;
+    } catch (final Exception e) {
+      try {
+        pub.close();
+      } catch (final Exception pe) {
+        e.addSuppressed(pe);
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Poll the duologue for activity.
+   */
+
+  public void poll()
+  {
+    this.exec.assertIsExecutorThread();
+    this.subscription.poll(this.handler, 10);
+  }
+
+  private void onMessageReceived(
+    final DirectBuffer buffer,
+    final int offset,
+    final int length,
+    final Header header)
+    throws IOException
+  {
+    this.exec.assertIsExecutorThread();
+
+    final String session_name =
+      Integer.toString(header.sessionId());
+    final String message =
+      EchoMessages.parseMessageUTF8(buffer, offset, length);
+
+    /*
+     * Try to parse an ECHO message.
+     */
+
+    LOG.debug(&quot;[{}] received: {}&quot;, session_name, message);
+    final Matcher echo_matcher = PATTERN_ECHO.matcher(message);
+    if (echo_matcher.matches()) {
+      EchoMessages.sendMessage(
+        this.publication,
+        this.send_buffer,
+        &quot;ECHO &quot; + echo_matcher.group(1));
+      return;
+    }
+
+    /*
+     * Otherwise, fail and close this duologue.
+     */
+
+    try {
+      EchoMessages.sendMessage(
+        this.publication,
+        this.send_buffer,
+        &quot;ERROR bad message&quot;);
+    } finally {
+      this.close();
+    }
+  }
+
+  private void setPublicationSubscription(
+    final Publication in_publication,
+    final Subscription in_subscription)
+  {
+    this.publication =
+      Objects.requireNonNull(in_publication, &quot;Publication&quot;);
+    this.subscription =
+      Objects.requireNonNull(in_subscription, &quot;Subscription&quot;);
+  }
+
+  private void onClientDisconnected(
+    final Image image)
+  {
+    this.exec.execute(() -&gt; {
+      final int image_session = image.sessionId();
+      final String session_name = Integer.toString(image_session);
+      final InetAddress address = EchoAddresses.extractAddress(image.sourceIdentity());
+
+      if (this.subscription.imageCount() == 0) {
+        LOG.debug(&quot;[{}] last client ({}) disconnected&quot;, session_name, address);
+        this.close();
+      } else {
+        LOG.debug(&quot;[{}] client {} disconnected&quot;, session_name, address);
+      }
+    });
+  }
+
+  private void onClientConnected(
+    final Image image)
+  {
+    this.exec.execute(() -&gt; {
+      final InetAddress remote_address =
+        EchoAddresses.extractAddress(image.sourceIdentity());
+
+      if (Objects.equals(remote_address, this.owner)) {
+        LOG.debug(&quot;[{}] client with correct IP connected&quot;,
+                  Integer.toString(image.sessionId()));
+      } else {
+        LOG.error(&quot;connecting client has wrong address: {}&quot;,
+                  remote_address);
+      }
+    });
+  }
+
+  /**
+   * @param now The current time
+   *
+   * @return {@code true} if this duologue has no subscribers and the current
+   * time {@code now} is after the intended expiry date of the duologue
+   */
+
+  public boolean isExpired(
+    final Instant now)
+  {
+    Objects.requireNonNull(now, &quot;now&quot;);
+
+    this.exec.assertIsExecutorThread();
+
+    return this.subscription.imageCount() == 0
+      &amp;&amp; now.isAfter(this.initial_expire);
+  }
+
+  /**
+   * @return {@code true} iff {@link #close()} has been called
+   */
+
+  public boolean isClosed()
+  {
+    this.exec.assertIsExecutorThread();
+
+    return this.closed;
+  }
+
+  @Override
+  public void close()
+  {
+    this.exec.assertIsExecutorThread();
+
+    if (!this.closed) {
+      try {
+        try {
+          this.publication.close();
+        } finally {
+          this.subscription.close();
+        }
+      } finally {
+        this.closed = true;
+      }
+    }
+  }
+
+  /**
+   * @return The data port
+   */
+
+  public int portData()
+  {
+    return this.port_data;
+  }
+
+  /**
+   * @return The control port
+   */
+
+  public int portControl()
+  {
+    return this.port_control;
+  }
+
+  /**
+   * @return The IP address that is permitted to participate in this duologue
+   */
+
+  public InetAddress ownerAddress()
+  {
+    return this.owner;
+  }
+
+  /**
+   * @return The session ID of the duologue
+   */
+
+  public int session()
+  {
+    return this.session;
+  }
+}
+</code></pre>
+<p>The <code>EchoServerDuologue.onMessageReceived()</code> method raises errors when the client sends a message that the server does not understand, and concludes by closing the <em>publication</em> and <em>subscription</em>. This addresses <a href="#weak_client_bad_messages">the noted issues with bad client messages</a> by effectively disconnecting clients that violate the protocol.</p>
+<p>The use of <em>dynamic MDC</em> on the <em>all clients</em> channel <em>subscriptions</em> and <em>publications</em> and on the <em>duologue</em> <em>subscriptions</em> and <em>publications</em> ensures that clients can connect to the server and receive responses even when those clients are behind NAT. This addresses the <a href="#weak_nat">issues noted about NAT</a>.</p>
+<p>In order to reduce the amount of duplicate code that results from creating <em>publications</em> and <em>subscriptions</em>, we abstract the calls to create them into their own class, <code>EchoChannels</code>:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoChannels.java#L19">EchoChannels</a></p>
+<pre data-include="out/aeron-guide/echo_server2_EchoChannels.txt"><code>public final class EchoChannels
+{
+  private EchoChannels()
+  {
+
+  }
+
+  /**
+   * Create a publication at the given address and port, using the given
+   * stream ID.
+   *
+   * @param aeron     The Aeron instance
+   * @param address   The address
+   * @param port      The port
+   * @param stream_id The stream ID
+   *
+   * @return A new publication
+   */
+
+  public static ConcurrentPublication createPublication(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int stream_id)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String pub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(
+          new StringBuilder(64)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .build();
+
+    return aeron.addPublication(pub_uri, stream_id);
+  }
+
+  /**
+   * Create a subscription with a control port (for dynamic MDC) at the given
+   * address and port, using the given stream ID.
+   *
+   * @param aeron     The Aeron instance
+   * @param address   The address
+   * @param port      The port
+   * @param stream_id The stream ID
+   *
+   * @return A new publication
+   */
+
+  public static Subscription createSubscriptionDynamicMDC(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int stream_id)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .controlEndpoint(
+          new StringBuilder(64)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .controlMode(&quot;dynamic&quot;)
+        .build();
+
+    return aeron.addSubscription(sub_uri, stream_id);
+  }
+
+  /**
+   * Create a publication with a control port (for dynamic MDC) at the given
+   * address and port, using the given stream ID.
+   *
+   * @param aeron     The Aeron instance
+   * @param address   The address
+   * @param port      The port
+   * @param stream_id The stream ID
+   *
+   * @return A new publication
+   */
+
+  public static ConcurrentPublication createPublicationDynamicMDC(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int stream_id)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String pub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .controlEndpoint(
+          new StringBuilder(32)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .controlMode(&quot;dynamic&quot;)
+        .build();
+
+    return aeron.addPublication(pub_uri, stream_id);
+  }
+
+  /**
+   * Create a subscription at the given address and port, using the given
+   * stream ID and image handlers.
+   *
+   * @param aeron                The Aeron instance
+   * @param address              The address
+   * @param port                 The port
+   * @param stream_id            The stream ID
+   * @param on_image_available   Called when an image becomes available
+   * @param on_image_unavailable Called when an image becomes unavailable
+   *
+   * @return A new publication
+   */
+
+  public static Subscription createSubscriptionWithHandlers(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int stream_id,
+    final AvailableImageHandler on_image_available,
+    final UnavailableImageHandler on_image_unavailable)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+    Objects.requireNonNull(on_image_available, &quot;on_image_available&quot;);
+    Objects.requireNonNull(on_image_unavailable, &quot;on_image_unavailable&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(
+          new StringBuilder(32)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .build();
+
+    return aeron.addSubscription(
+      sub_uri,
+      stream_id,
+      on_image_available,
+      on_image_unavailable);
+  }
+
+  /**
+   * Create a publication with a control port (for dynamic MDC) at the given
+   * address and port, using the given stream ID and session ID.
+   *
+   * @param aeron     The Aeron instance
+   * @param address   The address
+   * @param port      The port
+   * @param stream_id The stream ID
+   * @param session   The session ID
+   *
+   * @return A new publication
+   */
+
+  public static ConcurrentPublication createPublicationDynamicMDCWithSession(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int stream_id,
+    final int session)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String pub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .controlEndpoint(
+          new StringBuilder(32)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .controlMode(&quot;dynamic&quot;)
+        .sessionId(Integer.valueOf(session))
+        .build();
+
+    return aeron.addPublication(pub_uri, stream_id);
+  }
+
+  /**
+   * Create a subscription at the given address and port, using the given
+   * stream ID, session ID, and image handlers.
+   *
+   * @param aeron                The Aeron instance
+   * @param address              The address
+   * @param port                 The port
+   * @param stream_id            The stream ID
+   * @param on_image_available   Called when an image becomes available
+   * @param on_image_unavailable Called when an image becomes unavailable
+   * @param session              The session ID
+   *
+   * @return A new publication
+   */
+
+  public static Subscription createSubscriptionWithHandlersAndSession(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int stream_id,
+    final AvailableImageHandler on_image_available,
+    final UnavailableImageHandler on_image_unavailable,
+    final int session)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+    Objects.requireNonNull(on_image_available, &quot;on_image_available&quot;);
+    Objects.requireNonNull(on_image_unavailable, &quot;on_image_unavailable&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(
+          new StringBuilder(32)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .sessionId(Integer.valueOf(session))
+        .build();
+
+    return aeron.addSubscription(
+      sub_uri,
+      stream_id,
+      on_image_available,
+      on_image_unavailable);
+  }
+
+  /**
+   * Create a subscription with a control port (for dynamic MDC) at the given
+   * address and port, using the given stream ID, and session ID.
+   *
+   * @param aeron     The Aeron instance
+   * @param address   The address
+   * @param port      The port
+   * @param stream_id The stream ID
+   * @param session   The session ID
+   *
+   * @return A new publication
+   */
+
+  public static Subscription createSubscriptionDynamicMDCWithSession(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int session,
+    final int stream_id)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .controlEndpoint(
+          new StringBuilder(64)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .controlMode(&quot;dynamic&quot;)
+        .sessionId(Integer.valueOf(session))
+        .build();
+
+    return aeron.addSubscription(sub_uri, stream_id);
+  }
+
+  /**
+   * Create a publication at the given address and port, using the given
+   * stream ID and session ID.
+   *
+   * @param aeron     The Aeron instance
+   * @param address   The address
+   * @param port      The port
+   * @param stream_id The stream ID
+   * @param session   The session ID
+   *
+   * @return A new publication
+   */
+
+  public static ConcurrentPublication createPublicationWithSession(
+    final Aeron aeron,
+    final InetAddress address,
+    final int port,
+    final int session,
+    final int stream_id)
+  {
+    Objects.requireNonNull(aeron, &quot;aeron&quot;);
+    Objects.requireNonNull(address, &quot;address&quot;);
+
+    final String addr_string =
+      address.toString().replaceFirst(&quot;^/&quot;, &quot;&quot;);
+
+    final String pub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media(&quot;udp&quot;)
+        .endpoint(
+          new StringBuilder(64)
+            .append(addr_string)
+            .append(&quot;:&quot;)
+            .append(Integer.toUnsignedString(port))
+            .toString())
+        .sessionId(Integer.valueOf(session))
+        .build();
+
+    return aeron.addPublication(pub_uri, stream_id);
+  }
+}
+</code></pre>
+<p>In order to address the <a href="#weak_message_sending_not_robust">issues noted about message sending</a>, we define a <code>sendMessage()</code> method that retries sending for up to ~500ms before raising an exception. This ensures that messages cannot just “go missing”:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoMessages.java#L18">EchoMessages</a></p>
+<pre data-include="out/aeron-guide/echo_server2_EchoMessages.txt"><code>public final class EchoMessages
+{
+  private static final Logger LOG = LoggerFactory.getLogger(EchoMessages.class);
+
+  private EchoMessages()
+  {
+
+  }
+
+  /**
+   * Send the given message to the given publication. If the publication fails
+   * to accept the message, the method will retry {@code 5} times, waiting
+   * {@code 100} milliseconds each time, before throwing an exception.
+   *
+   * @param pub    The publication
+   * @param buffer A buffer that will hold the message for sending
+   * @param text   The message
+   *
+   * @return The new publication stream position
+   *
+   * @throws IOException If the message cannot be sent
+   */
+
+  public static long sendMessage(
+    final Publication pub,
+    final UnsafeBuffer buffer,
+    final String text)
+    throws IOException
+  {
+    Objects.requireNonNull(pub, &quot;publication&quot;);
+    Objects.requireNonNull(buffer, &quot;buffer&quot;);
+    Objects.requireNonNull(text, &quot;text&quot;);
+
+    LOG.trace(&quot;[{}] send: {}&quot;, Integer.toString(pub.sessionId()), text);
+
+    final byte[] value = text.getBytes(UTF_8);
+    buffer.putBytes(0, value);
+
+    long result = 0L;
+    for (int index = 0; index &lt; 5; ++index) {
+      result = pub.offer(buffer, 0, value.length);
+      if (result &lt; 0L) {
+        try {
+          Thread.sleep(100L);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        continue;
+      }
+      return result;
+    }
+
+    throw new IOException(
+      &quot;Could not send message: Error code: &quot; + errorCodeName(result));
+  }
+
+  private static String errorCodeName(final long result)
+  {
+    if (result == Publication.NOT_CONNECTED) {
+      return &quot;Not connected&quot;;
+    }
+    if (result == Publication.ADMIN_ACTION) {
+      return &quot;Administrative action&quot;;
+    }
+    if (result == Publication.BACK_PRESSURED) {
+      return &quot;Back pressured&quot;;
+    }
+    if (result == Publication.CLOSED) {
+      return &quot;Publication is closed&quot;;
+    }
+    if (result == Publication.MAX_POSITION_EXCEEDED) {
+      return &quot;Maximum term position exceeded&quot;;
+    }
+    throw new IllegalStateException();
+  }
+
+  /**
+   * Extract a UTF-8 encoded string from the given buffer.
+   *
+   * @param buffer The buffer
+   * @param offset The offset from the start of the buffer
+   * @param length The number of bytes to extract
+   *
+   * @return A string
+   */
+
+  public static String parseMessageUTF8(
+    final DirectBuffer buffer,
+    final int offset,
+    final int length)
+  {
+    Objects.requireNonNull(buffer, &quot;buffer&quot;);
+    final byte[] data = new byte[length];
+    buffer.getBytes(offset, data);
+    return new String(data, UTF_8);
+  }
+}
+</code></pre>
+<p>The server’s <code>run()</code> method should not be surprising:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L229">EchoServer.run()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_run.txt"><code>  public void run()
+  {
+    try (final Publication publication = this.setupAllClientsPublication()) {
+      try (final Subscription subscription = this.setupAllClientsSubscription()) {
+
+        final FragmentHandler handler =
+          new FragmentAssembler(
+            (buffer, offset, length, header) -&gt;
+              this.onInitialClientMessage(
+                publication,
+                buffer,
+                offset,
+                length,
+                header));
+
+        while (true) {
+          this.executor.execute(() -&gt; {
+            subscription.poll(handler, 100);
+            this.clients.poll();
+          });
+
+          try {
+            Thread.sleep(100L);
+          } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
+    }
+  }
+</code></pre>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L292">EchoServer.setupAllClientsPublication()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_setupAllClientsPublication.txt"><code>  private Publication setupAllClientsPublication()
+  {
+    return EchoChannels.createPublicationDynamicMDC(
+      this.aeron,
+      this.configuration.localAddress(),
+      this.configuration.localInitialControlPort(),
+      ECHO_STREAM_ID);
+  }
+</code></pre>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoServer.java#L305">EchoServer.setupAllClientsSubscription()</a></p>
+<pre data-include="out/aeron-guide/echo_server2_setupAllClientsSubscription.txt"><code>  private Subscription setupAllClientsSubscription()
+  {
+    return EchoChannels.createSubscriptionWithHandlers(
+      this.aeron,
+      this.configuration.localAddress(),
+      this.configuration.localInitialPort(),
+      ECHO_STREAM_ID,
+      this::onInitialClientConnected,
+      this::onInitialClientDisconnected);
+  }
+</code></pre>
+</section>
+<section id="echo-2.0-client" class="level2" data-number="4.6">
+<h2 data-number="4.6"><span class="header-section-number">4.6</span> Echo 2.0 Client</h2>
+<p>The client implementation is only slightly more complex than the original <code>echo</code> client.</p>
+<p>The <code>create()</code> method for the client has similar modifications to those made in the server implementation (such as the introduction of a reserved range of <em>session IDs</em>):</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoClient.java#L79">EchoClient.create()</a></p>
+<pre data-include="out/aeron-guide/echo_client2_create.txt"><code>  public static EchoClient create(
+    final EchoClientConfiguration configuration)
+    throws EchoClientException
+  {
+    Objects.requireNonNull(configuration, &quot;configuration&quot;);
+
+    final String directory =
+      configuration.baseDirectory()
+        .toAbsolutePath()
+        .toString();
+
+    final MediaDriver.Context media_context =
+      new MediaDriver.Context()
+        .dirDeleteOnStart(true)
+        .publicationReservedSessionIdLow(EchoSessions.RESERVED_SESSION_ID_LOW)
+        .publicationReservedSessionIdHigh(EchoSessions.RESERVED_SESSION_ID_HIGH)
+        .aeronDirectoryName(directory);
+
+    final Aeron.Context aeron_context =
+      new Aeron.Context().aeronDirectoryName(directory);
+
+    MediaDriver media_driver = null;
+
+    try {
+      media_driver = MediaDriver.launch(media_context);
+
+      Aeron aeron = null;
+      try {
+        aeron = Aeron.connect(aeron_context);
+      } catch (final Exception e) {
+        closeIfNotNull(aeron);
+        throw e;
+      }
+
+      return new EchoClient(media_driver, aeron, configuration);
+    } catch (final Exception e) {
+      try {
+        closeIfNotNull(media_driver);
+      } catch (final Exception c_ex) {
+        e.addSuppressed(c_ex);
+      }
+      throw new EchoClientCreationException(e);
+    }
+  }
+</code></pre>
+<p>The <code>run()</code> method is somewhat more involved:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoClient.java#L175">EchoClient.run()</a></p>
+<pre data-include="out/aeron-guide/echo_client2_run.txt"><code>  public void run()
+    throws EchoClientException
+  {
+    /*
+     * Generate a one-time pad.
+     */
+
+    this.duologue_key = this.random.nextInt();
+
+    final UnsafeBuffer buffer =
+      new UnsafeBuffer(BufferUtil.allocateDirectAligned(1024, 16));
+
+    final String session_name;
+    try (final Subscription subscription = this.setupAllClientsSubscription()) {
+      try (final Publication publication = this.setupAllClientsPublication()) {
+
+        /*
+         * Send a one-time pad to the server.
+         */
+
+        EchoMessages.sendMessage(
+          publication,
+          buffer,
+          &quot;HELLO &quot; + Integer.toUnsignedString(this.duologue_key, 16).toUpperCase());
+
+        session_name = Integer.toString(publication.sessionId());
+        this.waitForConnectResponse(subscription, session_name);
+      } catch (final IOException e) {
+        throw new EchoClientIOException(e);
+      }
+    }
+
+    /*
+     * Connect to the publication and subscription that the server has sent
+     * back to this client.
+     */
+
+    try (final Subscription subscription = this.setupConnectSubscription()) {
+      try (final Publication publication = this.setupConnectPublication()) {
+        this.runEchoLoop(buffer, session_name, subscription, publication);
+      } catch (final IOException e) {
+        throw new EchoClientIOException(e);
+      }
+    }
+  }
+</code></pre>
+<p>The code should, by now, be fairly self explanatory. We configure a <em>publication</em> and <em>subscription</em> to the server’s <em>all clients</em> channel, and send a <code>HELLO</code> message using a one-time pad with which we expect the server to encrypt a response. At each step, we wait for <em>publications</em> and <em>subscriptions</em> to become connected, or we time out and fail loudly with an error if they don’t (addressing the <a href="#weak_client_disconnections">issues noted about disconnections</a>).</p>
+<p>Assuming that we receive all the data we expect from the server, we enter into the now familar <code>runEchoLoop</code> method:</p>
+<p><a href="https://github.com/io7m/aeron-guide/blob/f967e09d36ec8c7f525a66ade2f6f00ab43dcd51/src/main/java/com/io7m/aeron_guide/take2/EchoClient.java#L221">EchoClient.runEchoLoop()</a></p>
+<pre data-include="out/aeron-guide/echo_client2_runEchoLoop.txt"><code>  private void runEchoLoop(
+    final UnsafeBuffer buffer,
+    final String session_name,
+    final Subscription subscription,
+    final Publication publication)
+    throws IOException
+  {
+    final FragmentHandler handler =
+      new FragmentAssembler(
+        (data, offset, length, header) -&gt;
+          onEchoResponse(session_name, data, offset, length));
+
+    while (true) {
+
+      /*
+       * Send ECHO messages to the server and wait for responses.
+       */
+
+      EchoMessages.sendMessage(
+        publication,
+        buffer,
+        &quot;ECHO &quot; + Long.toUnsignedString(this.random.nextLong(), 16));
+
+      for (int index = 0; index &lt; 100; ++index) {
+        subscription.poll(handler, 1000);
+
+        try {
+          Thread.sleep(10L);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+      }
+    }
+  }
+</code></pre>
+<p>The use of <code>EchoMessages.sendMessage()</code> will cause the loop to break with an exception if the server disconnects the client.</p>
+</section>
+<section id="example-usage" class="level2" data-number="4.7">
+<h2 data-number="4.7"><span class="header-section-number">4.7</span> Example Usage</h2>
+<p>We start up a server instance on <code>apricot</code>, binding the server to ports <code>9000</code> and <code>9001</code> on address <code>5.6.7.8</code>. The server will start assigning client <em>duologues</em> at UDP port <code>9010</code>, and is limited to a maximum of <code>4</code> clients:</p>
+<pre><code>apricot$ java -cp aeron-guide.jar com.io7m.aeron_guide.take2.EchoServer /tmp/aeron-server 5.6.7.8 9000 9001 9010 4</code></pre>
+<p>We start up a client instance on <code>maize</code>, telling it to connect to <code>apricot</code> and immediately disconnect it (for brevity) after it has sent and received one <code>ECHO</code> message:</p>
+<pre><code>maize$ java -cp aeron-guide.jar com.io7m.aeron_guide.take2.EchoClient /tmp/aeron-client 5.6.7.8 9000 9001
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: initial subscription connected
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: initial publication connected
+TRACE [main] com.io7m.aeron_guide.take2.EchoMessages: [-555798973] send: HELLO 611786D9
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: waiting for response
+TRACE [main] com.io7m.aeron_guide.take2.EchoClient: [-555798973] response: -555798973 CONNECT 9014 9011 129F3C18
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: [-555798973] connect 9014 9011 (encrypted 312425496)
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: CONNECT subscription connected
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: CONNECT publication connected
+TRACE [main] com.io7m.aeron_guide.take2.EchoMessages: [1938340545] send: ECHO 12cbcf2e9c84b2f0
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: [-555798973] response: ECHO 12cbcf2e9c84b2f0
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: [-555798973] ECHO 12cbcf2e9c84b2f0</code></pre>
+<p>We can see that despite that fact that <code>maize</code> is behind the NAT router <code>tomato</code>, it can still connect to and receive responses from <code>apricot</code>. The address of <code>maize</code> (<code>10.10.0.5</code>) from the perspective of <code>apricot</code> appears to be that of <code>tomato</code> (<code>10.10.0.1</code>):</p>
+<pre><code>(apricot)
+
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] initial client connected (10.10.0.1:55297)
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] received: HELLO 611786D9
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServerDuologue: creating new duologue at /5.6.7.8 (9014,9011) session 1938340545 for /10.10.0.1
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] created new duologue
+TRACE [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoMessages: [-2147483648] send: -555798973 CONNECT 9014 9011 129F3C18
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] initial client disconnected (10.10.0.1:55297)
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServerDuologue: [1938340545] client with correct IP connected
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServerDuologue: [1938340545] received: ECHO 12cbcf2e9c84b2f0
+TRACE [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoMessages: [1938340545] send: ECHO 12cbcf2e9c84b2f0
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServerDuologue: [1938340545] last client (/10.10.0.1) disconnected
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] duologue expired
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] duologue closed
+DEBUG [com.io7m.aeron_guide.take2.server[16]] com.io7m.aeron_guide.take2.EchoServer: [-555798973] deleted duologue</code></pre>
+<p>The packet filter logs on <code>tomato</code> clearly show the datagrams passing through:</p>
+<pre><code>rule 1/(match) pass in on em1: 10.10.0.5.43645 &gt; 5.6.7.8.9001: udp 36 (DF)
+rule 1/(match) pass out on em0: 10.10.0.1.50088 &gt; 5.6.7.8.9001: udp 36 (DF)
+rule 1/(match) pass in on em1: 10.10.0.5.54239 &gt; 5.6.7.8.9000: udp 40 (DF)
+rule 1/(match) pass out on em0: 10.10.0.1.55297 &gt; 5.6.7.8.9000: udp 40 (DF)
+rule 1/(match) pass in on em1: 10.10.0.5.49564 &gt; 5.6.7.8.9011: udp 36 (DF)
+rule 1/(match) pass out on em0: 10.10.0.1.60760 &gt; 5.6.7.8.9011: udp 36 (DF)
+rule 1/(match) pass in on em1: 10.10.0.5.36996 &gt; 5.6.7.8.9014: udp 40 (DF)
+rule 1/(match) pass out on em0: 10.10.0.1.60643 &gt; 5.6.7.8.9014: udp 40 (DF)</code></pre>
+<p>Starting up three client instances on <code>maize</code> and then trying to start up a fourth shows that the server will not allow any more connections from <code>maize</code>’s IP address:</p>
+<pre><code>maize$ java -cp aeron-guide.jar com.io7m.aeron_guide.take2.EchoClient /tmp/aeron-client4 5.6.7.8 9000 9001
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: initial subscription connected
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: initial publication connected
+TRACE [main] com.io7m.aeron_guide.take2.EchoMessages: [-2147483648] send: HELLO 16418C02
+DEBUG [main] com.io7m.aeron_guide.take2.EchoClient: waiting for response
+TRACE [main] com.io7m.aeron_guide.take2.EchoClient: [-2147483648] response: -2147483648 ERROR too many connections for IP address
+ERROR [main] com.io7m.aeron_guide.take2.EchoClient: [-2147483648] server returned an error: too many connections for IP address
+Exception in thread &quot;main&quot; com.io7m.aeron_guide.take2.EchoClientRejectedException: Server rejected this client
+    at com.io7m.aeron_guide.take2.EchoClient.waitForConnectResponse(EchoClient.java:353)
+    at com.io7m.aeron_guide.take2.EchoClient.run(EchoClient.java:201)
+    at com.io7m.aeron_guide.take2.EchoClient.main(EchoClient.java:165)</code></pre>
+</section>
+</section>
+<section id="further-enhancements" class="level1" data-number="5">
+<h1 data-number="5"><span class="header-section-number">5</span> Further Enhancements</h1>
+<section id="ipv6" class="level2" data-number="5.1">
+<h2 data-number="5.1"><span class="header-section-number">5.1</span> IPv6</h2>
+<p>Currently, the implementation as described will work correctly over IPv6. The main issue is that the IP-level restrictions that have been added (such as “no more than 4 connections per IP address”) are ineffective in IPv6. The IP restrictions are predicated on the notion that (as is true of IPv4 today) IP addresses are in short supply and so a casual malicious client will not have control of a large collection of IP addresses that could be used to circumvent access restrictions.</p>
+<p>In IPv6, every client has access to 18446744073709551616 addresses at a minimum. In order to implement IP access restrictions, the rules would need to be expanded in order to exclude entire subnets.</p>
+</section>
+<section id="endpoint-level-filtering" class="level2" data-number="5.2">
+<h2 data-number="5.2"><span class="header-section-number">5.2</span> Endpoint-level Filtering</h2>
+<p>The current implementation parses the strings returned by <code>Image.sourceIdentity()</code> and acts based on the parsed addresses. This is somewhat unpleasant and is arguably working at the wrong level of abstraction for an Aeron program. For example, if we wanted to take the client and server program and run them over a transport that was not UDP/IP, they would need to be rewritten.</p>
+<p>Aeron is extensible in that it allows programmers to provide their own <em>endpoints</em>. An <em>endpoint</em> can be considered as an abstraction over a resource such as a UDP socket. Aeron comes with a number of custom <em>endpoint</em> implementations that allow for functionality such as simulating packet loss, congestion control, and more. The somewhat crude IP-level restrictions implemented by the server might better be implemented with a custom <em>endpoint</em> implementation.</p>
+<p>See <a href="https://github.com/real-logic/aeron/tree/master/aeron-driver/src/main/java/io/aeron/driver/ext">the driver extension directory</a>.</p>
+</section>
+<section id="per-packet-encryption" class="level2" data-number="5.3">
+<h2 data-number="5.3"><span class="header-section-number">5.3</span> Per-packet Encryption</h2>
+<p>If we wanted to protect against malicious clients that have the capability of reading and/or modifying the packets sent by another client (by ARP spoofing or some other method), we would need to add some form of authentication and encryption to the protocol.</p>
+<p>Currently, the application would need to arrange for the client and server to agree on a session key and would then need to encrypt each message given to <code>Publication.offer()</code> (and accordingly decrypt each message retrieved by <code>Subscription.poll()</code>). This would entail a fair amount of overhead both in the large number of crypto operations required and the inevitable per-message padding required for many algorithm modes to operate.</p>
+<p>Hope is on the horizon, however. As of the time of writing (<code>2018-04-10</code>), support for protocol-level encryption is a planned feature in Aeron and should remove the need for application-level handling of crypto.</p>
+</section>
+</section>
+<section class="footnotes" role="doc-endnotes">
+<hr />
+<ol>
+<li id="fn1" role="doc-endnote"><p>Aeron is designed to service hundreds of clients as opposed to thousands. See <a href="https://github.com/real-logic/aeron/wiki/Best-Practices-Guide#system-design">System Design</a> for information.<a href="#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2" role="doc-endnote"><p>The <code>Subscription</code> interface also contains many different variations on <code>poll</code> that provide for different semantics depending on the requirements of the application.<a href="#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3" role="doc-endnote"><p>The method also makes no attempt to check if the contents of the string would overflow the buffer. This could have spectacular consequences given the nature of <code>Unsafe</code> buffers.<a href="#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4" role="doc-endnote"><p>We use a <code>fake://</code> URI scheme simply because the <code>java.net.URI</code> class requires <em>a</em> scheme of some description if we want it to parse the input into <code>host</code> and <code>port</code> segments.<a href="#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5" role="doc-endnote"><p>A pattern recommended by and for the <a href="https://lmax-exchange.github.io/disruptor/">Disruptor</a>.<a href="#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn6" role="doc-endnote"><p>The exception to this rule is when two clients (or possibly the server and the client) are in the same LAN. In this case, the attacker can use <a href="https://en.wikipedia.org/wiki/ARP_spoofing">ARP spoofing</a> to both read and effectively modify any and all packets. We do not attempt to try to preserve security in this case; doing so requires strong cryptography and would be overkill for this example.<a href="#fnref6" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn7" role="doc-endnote"><p>Aeron is designed to service hundreds of clients as opposed to thousands. See <a href="https://github.com/real-logic/aeron/wiki/Best-Practices-Guide#system-design">System Design</a> for information.<a href="#fnref7" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn8" role="doc-endnote"><p>Strictly speaking, the server does not “reject” the client based on the session ID. It’s just that the application specifies that it is not interested in packets with anything other than a a given <em>session ID</em> and therefore never sees packets that don’t belong to that session.<a href="#fnref8" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn9" role="doc-endnote"><p>It is critical for the security of a one-time pad that this value is generated afresh on each connection attempt and never reused for any other communication. The security of a one-time pad can be broken instantly by obtaining two different messages that were encrypted with the same value.<a href="#fnref9" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn10" role="doc-endnote"><p>While both appearing to do essentially the same job, the <code>EchoServerPortAllocator</code> and <code>EchoServerSessionAllocator</code> classes use different algorithms due to the differences in the expected range of values to be allocated. The <code>EchoServerPortAllocator</code> class expects to pick numbers from a small range and therefore keeps the entire range in memory: It uses <code>O(n)</code> storage for a range of <code>n</code> values, but has guaranteed <code>O(1)</code> time complexity for both allocation and deallocation. The <code>EchoServerSessionAllocator</code> expects to pick numbers from range of at least <code>2 ^ 31</code> and so does not keep a list of all of the unused numbers in memory. It uses only <code>O(m)</code> storage where <code>m</code> is the number of allocated values, but has a worst-case <code>O(n)</code> time complexity for allocation when the number of allocated values approaches <code>n</code>.<a href="#fnref10" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section></div>
+  </body>
+</html>

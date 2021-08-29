@@ -1,0 +1,12 @@
+  private Publication setupPublication()
+  {
+    final String pub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media("udp")
+        .endpoint(this.remote_address.toString().replaceFirst("^/", ""))
+        .build();
+
+    LOG.debug("publication URI: {}", pub_uri);
+    return this.aeron.addPublication(pub_uri, ECHO_STREAM_ID);
+  }

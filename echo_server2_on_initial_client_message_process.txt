@@ -1,0 +1,85 @@
+    void onInitialClientMessageProcess(
+      final Publication publication,
+      final String session_name,
+      final Integer session_boxed,
+      final String message)
+      throws EchoServerException, IOException
+    {
+      this.exec.assertIsExecutorThread();
+
+      LOG.debug("[{}] received: {}", session_name, message);
+
+      /*
+       * The HELLO command is the only acceptable message from clients
+       * on the all-clients channel.
+       */
+
+      final Matcher hello_matcher = PATTERN_HELLO.matcher(message);
+      if (!hello_matcher.matches()) {
+        EchoMessages.sendMessage(
+          publication,
+          this.send_buffer,
+          errorMessage(session_name, "bad message"));
+        return;
+      }
+
+      /*
+       * Check to see if there are already too many clients connected.
+       */
+
+      if (this.client_duologues.size() >= this.configuration.clientMaximumCount()) {
+        LOG.debug("server is full");
+        EchoMessages.sendMessage(
+          publication,
+          this.send_buffer,
+          errorMessage(session_name, "server full"));
+        return;
+      }
+
+      /*
+       * Check to see if this IP address already has the maximum number of
+       * duologues allocated to it.
+       */
+
+      final InetAddress owner =
+        this.client_session_addresses.get(session_boxed);
+
+      if (this.address_counter.countFor(owner) >=
+        this.configuration.maximumConnectionsPerAddress()) {
+        LOG.debug("too many connections for IP address");
+        EchoMessages.sendMessage(
+          publication,
+          this.send_buffer,
+          errorMessage(session_name, "too many connections for IP address"));
+        return;
+      }
+
+      /*
+       * Parse the one-time pad with which the client wants the server to
+       * encrypt the identifier of the session that will be created.
+       */
+
+      final int duologue_key =
+        Integer.parseUnsignedInt(hello_matcher.group(1), 16);
+
+      /*
+       * Allocate a new duologue, encrypt the resulting session ID, and send
+       * a message to the client telling it where to find the new duologue.
+       */
+
+      final EchoServerDuologue duologue =
+        this.allocateNewDuologue(session_name, session_boxed, owner);
+
+      final String session_crypt =
+        Integer.toUnsignedString(duologue_key ^ duologue.session(), 16)
+          .toUpperCase();
+
+      EchoMessages.sendMessage(
+        publication,
+        this.send_buffer,
+        connectMessage(
+          session_name,
+          duologue.portData(),
+          duologue.portControl(),
+          session_crypt));
+    }

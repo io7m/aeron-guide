@@ -1,0 +1,24 @@
+  public static void main(
+    final String[] args)
+    throws Exception
+  {
+    if (args.length < 5) {
+      LOG.error("usage: directory local-address local-port remote-address remote-port");
+      System.exit(1);
+    }
+
+    final Path directory = Paths.get(args[0]);
+    final InetAddress local_name = InetAddress.getByName(args[1]);
+    final Integer local_port = Integer.valueOf(args[2]);
+    final InetAddress remote_name = InetAddress.getByName(args[3]);
+    final Integer remote_port = Integer.valueOf(args[4]);
+
+    final InetSocketAddress local_address =
+      new InetSocketAddress(local_name, local_port.intValue());
+    final InetSocketAddress remote_address =
+      new InetSocketAddress(remote_name, remote_port.intValue());
+
+    try (final EchoClient client = create(directory, local_address, remote_address)) {
+      client.run();
+    }
+  }

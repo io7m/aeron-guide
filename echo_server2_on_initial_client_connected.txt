@@ -1,0 +1,14 @@
+  private void onInitialClientConnected(
+    final Image image)
+  {
+    this.executor.execute(() -> {
+      LOG.debug(
+        "[{}] initial client connected ({})",
+        Integer.toString(image.sessionId()),
+        image.sourceIdentity());
+
+      this.clients.onInitialClientConnected(
+        image.sessionId(),
+        EchoAddresses.extractAddress(image.sourceIdentity()));
+    });
+  }

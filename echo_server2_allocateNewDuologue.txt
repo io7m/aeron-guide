@@ -1,0 +1,43 @@
+    private EchoServerDuologue allocateNewDuologue(
+      final String session_name,
+      final Integer session_boxed,
+      final InetAddress owner)
+      throws
+      EchoServerPortAllocationException,
+      EchoServerSessionAllocationException
+    {
+      this.address_counter.increment(owner);
+
+      final EchoServerDuologue duologue;
+      try {
+        final int[] ports = this.port_allocator.allocate(2);
+        try {
+          final int session = this.session_allocator.allocate();
+          try {
+            duologue =
+              EchoServerDuologue.create(
+                this.aeron,
+                this.clock,
+                this.exec,
+                this.configuration.localAddress(),
+                owner,
+                session,
+                ports[0],
+                ports[1]);
+            LOG.debug("[{}] created new duologue", session_name);
+            this.client_duologues.put(session_boxed, duologue);
+          } catch (final Exception e) {
+            this.session_allocator.free(session);
+            throw e;
+          }
+        } catch (final EchoServerSessionAllocationException e) {
+          this.port_allocator.free(ports[0]);
+          this.port_allocator.free(ports[1]);
+          throw e;
+        }
+      } catch (final EchoServerPortAllocationException e) {
+        this.address_counter.decrement(owner);
+        throw e;
+      }
+      return duologue;
+    }

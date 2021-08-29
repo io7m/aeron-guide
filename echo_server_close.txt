@@ -1,0 +1,5 @@
+  public void close()
+  {
+    this.aeron.close();
+    this.media_driver.close();
+  }

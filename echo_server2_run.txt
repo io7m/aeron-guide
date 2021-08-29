@@ -1,0 +1,30 @@
+  public void run()
+  {
+    try (final Publication publication = this.setupAllClientsPublication()) {
+      try (final Subscription subscription = this.setupAllClientsSubscription()) {
+
+        final FragmentHandler handler =
+          new FragmentAssembler(
+            (buffer, offset, length, header) ->
+              this.onInitialClientMessage(
+                publication,
+                buffer,
+                offset,
+                length,
+                header));
+
+        while (true) {
+          this.executor.execute(() -> {
+            subscription.poll(handler, 100);
+            this.clients.poll();
+          });
+
+          try {
+            Thread.sleep(100L);
+          } catch (final InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        }
+      }
+    }
+  }

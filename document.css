@@ -1,0 +1,56 @@
+.constant,
+.expression,
+.keyword,
+.function,
+.variable
+{
+  font-family: monospace;
+}
+
+.subject {
+  font-style: italic;
+}
+
+.brand
+{
+  font-family: monospace;
+}
+
+th {
+  text-align: left;
+  padding-bottom: 0.5em;
+}
+
+blockquote {
+  font-style: italic;
+}
+
+body {
+  padding: 1em;
+  font-family: sans-serif;
+  max-width: 50em;
+  text-align: justify;
+}
+
+th {
+  text-align: left;
+  padding-bottom: 0.5em;
+}
+
+td {
+  padding-right: 2em;
+}
+
+pre {
+  border: 1px #ddd solid;
+  background-color: #eee;
+  padding: 1em;
+  overflow: auto;
+}
+
+figure {
+  border: 1px #ddd solid;
+  padding: 1em;
+  margin: 0em;
+  overflow: auto;
+}

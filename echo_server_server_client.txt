@@ -1,0 +1,101 @@
+  private static final class ServerClient implements AutoCloseable
+  {
+    private static final Pattern HELLO_PATTERN =
+      Pattern.compile("HELLO ([0-9]+)");
+
+    private enum State
+    {
+      INITIAL,
+      CONNECTED
+    }
+
+    private final int session;
+    private final Image image;
+    private final Aeron aeron;
+    private State state;
+    private final UnsafeBuffer buffer;
+    private Publication publication;
+
+    ServerClient(
+      final int session,
+      final Image in_image,
+      final Aeron in_aeron)
+    {
+      this.session = session;
+      this.image = Objects.requireNonNull(in_image, "image");
+      this.aeron = Objects.requireNonNull(in_aeron, "aeron");
+      this.state = State.INITIAL;
+      this.buffer = new UnsafeBuffer(
+        BufferUtil.allocateDirectAligned(2048, 16));
+    }
+
+    @Override
+    public void close()
+      throws Exception
+    {
+      closeIfNotNull(this.publication);
+    }
+
+    public void onReceiveMessage(
+      final String message)
+    {
+      Objects.requireNonNull(message, "message");
+
+      LOG.debug(
+        "receive [0x{}]: {}",
+        Integer.toUnsignedString(this.session),
+        message);
+
+      switch (this.state) {
+        case INITIAL: {
+          this.onReceiveMessageInitial(message);
+          break;
+        }
+        case CONNECTED: {
+          sendMessage(this.publication, this.buffer, message);
+          break;
+        }
+      }
+    }
+
+    private void onReceiveMessageInitial(
+      final String message)
+    {
+      final Matcher matcher = HELLO_PATTERN.matcher(message);
+      if (!matcher.matches()) {
+        LOG.warn("client sent malformed HELLO message: {}", message);
+        return;
+      }
+
+      final int port =
+        Integer.parseUnsignedInt(matcher.group(1));
+      final String source_id =
+        this.image.sourceIdentity();
+
+      try {
+        final URI source_uri =
+          new URI("fake://" + source_id);
+
+        final String address =
+          new StringBuilder(64)
+            .append(source_uri.getHost())
+            .append(":")
+            .append(port)
+            .toString();
+
+        final String pub_uri =
+          new ChannelUriStringBuilder()
+            .reliable(TRUE)
+            .media("udp")
+            .endpoint(address)
+            .build();
+
+        this.publication =
+          this.aeron.addPublication(pub_uri, ECHO_STREAM_ID);
+
+        this.state = State.CONNECTED;
+      } catch (final URISyntaxException e) {
+        LOG.warn("client sent malformed HELLO message: {}: ", message, e);
+      }
+    }
+  }

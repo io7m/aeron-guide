@@ -1,0 +1,12 @@
+  private Subscription setupSubscription()
+  {
+    final String sub_uri =
+      new ChannelUriStringBuilder()
+        .reliable(TRUE)
+        .media("udp")
+        .endpoint(this.local_address.toString().replaceFirst("^/", ""))
+        .build();
+
+    LOG.debug("subscription URI: {}", sub_uri);
+    return this.aeron.addSubscription(sub_uri, ECHO_STREAM_ID);
+  }

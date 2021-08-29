@@ -1,0 +1,12 @@
+  private void onInitialClientDisconnected(
+    final Image image)
+  {
+    this.executor.execute(() -> {
+      LOG.debug(
+        "[{}] initial client disconnected ({})",
+        Integer.toString(image.sessionId()),
+        image.sourceIdentity());
+
+      this.clients.onInitialClientDisconnected(image.sessionId());
+    });
+  }

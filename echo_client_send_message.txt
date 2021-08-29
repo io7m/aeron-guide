@@ -1,0 +1,27 @@
+  private static boolean sendMessage(
+    final Publication pub,
+    final UnsafeBuffer buffer,
+    final String text)
+  {
+    LOG.debug("send: {}", text);
+
+    final byte[] value = text.getBytes(UTF_8);
+    buffer.putBytes(0, value);
+
+    long result = 0L;
+    for (int index = 0; index < 5; ++index) {
+      result = pub.offer(buffer, 0, text.length());
+      if (result < 0L) {
+        try {
+          Thread.sleep(100L);
+        } catch (final InterruptedException e) {
+          Thread.currentThread().interrupt();
+        }
+        continue;
+      }
+      return true;
+    }
+
+    LOG.error("could not send: {}", Long.valueOf(result));
+    return false;
+  }

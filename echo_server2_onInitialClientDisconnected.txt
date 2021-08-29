@@ -1,0 +1,7 @@
+    void onInitialClientDisconnected(
+      final int session_id)
+    {
+      this.exec.assertIsExecutorThread();
+
+      this.client_session_addresses.remove(Integer.valueOf(session_id));
+    }

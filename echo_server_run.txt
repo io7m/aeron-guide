@@ -1,0 +1,7 @@
+  public void run()
+    throws Exception
+  {
+    try (final Subscription sub = this.setupSubscription()) {
+      this.runLoop(sub);
+    }
+  }
