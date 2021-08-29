@@ -32,8 +32,8 @@ pandoc \
   -f markdown \
   -t html document.md > "${OUTDIR}/aeron-guide/index.xhtml" || exit 1
 
-cp document.css   "${OUTDIR}"
-cp normal_nat.png "${OUTDIR}"
+cp document.css   "${OUTDIR}/aeron-guide/"
+cp normal_nat.png "${OUTDIR}/aeron-guide/"
 
 find "${OUTDIR}" -exec touch -d "${DOCUMENT_TIME}" -m --no-create {} \; || exit 1
 find "${OUTDIR}" -exec touch -d "${DOCUMENT_TIME}" -a --no-create {} \; || exit 1
